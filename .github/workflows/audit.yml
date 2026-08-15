@@ -1,0 +1,33 @@
+name: audit
+
+# Everything a pull request deliberately does not check.
+#
+# A pull request fetches what it is proposing, not the whole registry — otherwise a patch bump
+# re-downloads every publisher's back catalogue, every time. The cost of that is link rot: an
+# artifact published months ago can quietly stop resolving, or stop hashing to what was signed, and
+# no pull request would ever notice.
+#
+# So this runs weekly with --recheck-all and fetches every archive of every published version. A red
+# run here is not a submitter's mistake; it is something that has changed underneath us, and the
+# plugin it names may need withdrawing.
+
+on:
+  schedule:
+    - cron: '17 5 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  everything:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r tools/requirements.txt
+      - env:
+          PYTHONPATH: tools
+        run: python -m registry.validate --repo . --base-ref HEAD --recheck-all

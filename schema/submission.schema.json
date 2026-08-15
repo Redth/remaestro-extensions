@@ -1,0 +1,163 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Redth/remaestro-extensions/schema/submission.schema.json",
+  "title": "reMaestro plugin submission",
+  "description": "One of these lives at plugins/<id>/plugin.json and is the whole submission. Unknown fields are rejected rather than ignored: a field we do not understand is a claim we cannot check.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "name", "summary", "publisher", "kind", "license", "source", "versions"],
+  "properties": {
+    "$schema": { "type": "string" },
+
+    "id": {
+      "description": "Reverse-DNS, lowercase, allocated once and never reassigned. Must equal the directory name.",
+      "type": "string",
+      "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?){2,}$",
+      "maxLength": 128
+    },
+    "name": { "type": "string", "minLength": 1, "maxLength": 60 },
+    "summary": {
+      "description": "One line, shown in the list. No marketing claims about safety or review — see CONTRIBUTING.md.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+    },
+    "description": {
+      "description": "Longer prose for the plugin's page. Plain text or CommonMark.",
+      "type": "string",
+      "maxLength": 8000
+    },
+    "publisher": {
+      "description": "The id of a record in publishers/. Set on first publication and never changed — an id that changes hands is an entitlement pointing at different software.",
+      "type": "string",
+      "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$",
+      "maxLength": 128
+    },
+    "kind": {
+      "description": "What the hub does with it. Only 'driver' exists today.",
+      "type": "string",
+      "enum": ["driver"]
+    },
+    "license": {
+      "description": "SPDX identifier. Required from the first submission even though only free licences are accepted today, because adding a required field later invalidates every published manifest.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64
+    },
+    "homepage": { "type": "string", "format": "uri", "pattern": "^https://" },
+    "source": {
+      "description": "Where the source lives. Checked that it resolves; never checked that the archives were built from it — see README.md.",
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https://"
+    },
+    "tags": {
+      "type": "array",
+      "maxItems": 8,
+      "items": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,30}$" }
+    },
+
+    "versions": {
+      "description": "Append-only. A published version is never edited or removed; it is withdrawn.",
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/version" }
+    }
+  },
+
+  "$defs": {
+    "version": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "abi", "runtime", "releasedAt", "archives"],
+      "properties": {
+        "version": {
+          "description": "Strict semver. Not prefixed with 'v'.",
+          "type": "string",
+          "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-((?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\\.(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\\+([0-9a-zA-Z-]+(?:\\.[0-9a-zA-Z-]+)*))?$"
+        },
+        "abi": {
+          "description": "The driver.proto protocol version this build was made against. One integer per version, the same across every architecture — if two architectures disagree they are different software.",
+          "type": "integer",
+          "minimum": 1
+        },
+        "runtime": {
+          "description": "What the box must already have. 'native' is a self-contained or static executable; 'python3' is present on the appliance and in the container. Node is on neither, so a Node plugin ships as 'native'.",
+          "type": "string",
+          "enum": ["native", "python3"]
+        },
+        "releasedAt": { "type": "string", "format": "date" },
+        "sourceCommit": { "type": "string", "pattern": "^[0-9a-f]{7,64}$" },
+        "notes": { "type": "string", "maxLength": 2000 },
+
+        "archives": {
+          "description": "One archive per architecture, keyed by runtime identifier. A box downloads its own and only its own.",
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": false,
+          "propertyNames": { "enum": ["linux-arm64", "linux-x64"] },
+          "patternProperties": {
+            "^linux-(arm64|x64)$": { "$ref": "#/$defs/archive" }
+          }
+        },
+
+        "unsupportedRids": {
+          "description": "An architecture this version deliberately has no build for, and why. Saying so explicitly is what stops 'we forgot' looking like 'we decided'.",
+          "type": "object",
+          "additionalProperties": false,
+          "propertyNames": { "enum": ["linux-arm64", "linux-x64"] },
+          "patternProperties": {
+            "^linux-(arm64|x64)$": { "type": "string", "minLength": 8, "maxLength": 200 }
+          }
+        },
+
+        "withdrawn": {
+          "description": "The kill switch. Marks a version as no longer offered; the hub warns about it where it is installed. It cannot uninstall anything, and must not be able to.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["at", "reason"],
+          "properties": {
+            "at": { "type": "string", "format": "date" },
+            "reason": { "type": "string", "minLength": 8, "maxLength": 500 }
+          }
+        }
+      }
+    },
+
+    "archive": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["url", "sha256", "size", "signature", "keyId"],
+      "properties": {
+        "url": {
+          "description": "Absolute https URL to a gzipped tar. Absolute rather than relative to the index, so an artifact can later move behind an authenticated endpoint without the install path changing.",
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https://"
+        },
+        "sha256": {
+          "description": "Hex SHA-256 of the archive bytes. 64 characters; anything else cannot be a hash.",
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "size": {
+          "description": "Bytes. Lets a hub refuse an oversized artifact before downloading it.",
+          "type": "integer",
+          "minimum": 1
+        },
+        "signature": {
+          "description": "Base64 of a detached ECDSA P-256 signature over SHA-256 of the archive bytes, DER-encoded. Made by the publisher, never by us.",
+          "type": "string",
+          "pattern": "^[A-Za-z0-9+/]+={0,2}$",
+          "minLength": 64,
+          "maxLength": 256
+        },
+        "keyId": {
+          "description": "Which of the publisher's pinned keys signed it.",
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._-]{0,62}$"
+        }
+      }
+    }
+  }
+}

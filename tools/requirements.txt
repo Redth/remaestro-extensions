@@ -1,0 +1,4 @@
+# The validator's only dependency. Everything else is the standard library, plus `openssl` and
+# `git` from the environment — signatures go through openssl because that is the same operation,
+# with the same encodings, that the hub performs when it verifies a release manifest.
+jsonschema==4.26.0

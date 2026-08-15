@@ -1,0 +1,70 @@
+name: validate
+
+# `pull_request`, deliberately, and not `pull_request_target`.
+#
+# This workflow downloads archives chosen by whoever opened the pull request. `pull_request` runs
+# with a read-only token and no access to any secret in this repository, so the index signing key
+# is not reachable from a job that touches a stranger's bytes. `pull_request_target` would hand
+# that job the repository's secrets, which is the shape almost every registry-CI compromise takes.
+#
+# Nothing here executes a submitted plugin. The archive is opened to read one file out of it.
+# Starting a plugin and asking it to describe itself is a real and valuable check, and it belongs
+# in an isolated runner rather than in this one.
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  submissions:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The base ref is not an optimisation. Pinned publisher keys, ids that are never
+          # reassigned and versions that are never edited after publication are all properties of
+          # the difference between this pull request and what was already published — none of them
+          # can be checked from the working tree alone.
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - run: pip install -r tools/requirements.txt
+
+      - name: fetch the base
+        run: git fetch --no-tags origin "${{ github.base_ref }}"
+
+      - name: validate
+        env:
+          PYTHONPATH: tools
+          # A key rotation is allowed only when a maintainer has looked at it and said so with a
+          # label. An account takeover and a legitimate new key are the same diff; the label is a
+          # person asserting they know which one this is.
+          REGISTRY_ALLOW_KEY_ROTATION: ${{ contains(github.event.pull_request.labels.*.name, 'key-rotation') && '1' || '0' }}
+        run: |
+          python -m registry.validate \
+            --repo . \
+            --base-ref "origin/${{ github.base_ref }}"
+
+      - name: the index still generates
+        env:
+          PYTHONPATH: tools
+        run: python -m registry.build_index --repo . --out "$RUNNER_TEMP/index"
+
+  tooling:
+    # The validator's own tests. A rule that stops being enforced is invisible in a registry whose
+    # submissions all happen to be well-formed, so the suite sabotages each rule on every run.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r tools/requirements.txt
+      - run: python tests/test_registry.py

@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Redth/remaestro-extensions/schema/index-plugin.schema.json",
+  "title": "reMaestro plugin index document",
+  "description": "Generated. One per plugin, at index/plugins/<id>.json with its .sig beside it. This is the document a hub fetches to install or update, and it is deliberately not a list of every version ever published — see docs/index-format.md.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "id", "name", "summary", "license", "source", "publisher", "latest", "withdrawn", "generatedAt"],
+  "properties": {
+    "schema": { "type": "integer", "const": 1 },
+    "id": { "type": "string" },
+    "name": { "type": "string" },
+    "summary": { "type": "string" },
+    "description": { "type": "string" },
+    "license": { "type": "string" },
+    "homepage": { "type": "string" },
+    "source": { "type": "string" },
+    "kind": { "type": "string" },
+    "tags": { "type": "array", "items": { "type": "string" } },
+
+    "publisher": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "contact", "keys"],
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "contact": { "type": "string" },
+        "keys": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "algorithm", "publicKey", "status"],
+            "properties": {
+              "id": { "type": "string" },
+              "algorithm": { "type": "string" },
+              "publicKey": { "type": "string" },
+              "status": { "type": "string", "enum": ["active", "revoked"] }
+            }
+          }
+        }
+      }
+    },
+
+    "latest": {
+      "description": "The newest offered version for each abi, keyed by the abi as a string. Keyed rather than listed because the lookup that matters is 'what do you have that I can speak', and because a document that grows with every release eventually fails to parse on the oldest box in the field.",
+      "type": "object",
+      "minProperties": 0,
+      "propertyNames": { "pattern": "^[1-9][0-9]{0,3}$" },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["version", "abi", "runtime", "releasedAt", "archives"],
+        "properties": {
+          "version": { "type": "string" },
+          "abi": { "type": "integer" },
+          "runtime": { "type": "string" },
+          "releasedAt": { "type": "string" },
+          "sourceCommit": { "type": "string" },
+          "notes": { "type": "string" },
+          "unsupportedRids": { "type": "object", "additionalProperties": { "type": "string" } },
+          "archives": {
+            "type": "object",
+            "minProperties": 1,
+            "additionalProperties": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["url", "sha256", "size", "signature", "keyId"],
+              "properties": {
+                "url": { "type": "string" },
+                "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+                "size": { "type": "integer" },
+                "signature": { "type": "string" },
+                "keyId": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    },
+
+    "withdrawn": {
+      "description": "Versions pulled after publication. A hub that has one installed says so; nothing here removes anything from a box.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["version", "at", "reason"],
+        "properties": {
+          "version": { "type": "string" },
+          "at": { "type": "string" },
+          "reason": { "type": "string" }
+        }
+      }
+    },
+
+    "generatedAt": { "type": "string" }
+  }
+}

@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Redth/remaestro-extensions/schema/index-catalog.schema.json",
+  "title": "reMaestro plugin browse catalogue",
+  "description": "Generated. One document listing every plugin, at index/catalog.json. Read by the console's browse and search only — no install or update path may depend on it, which is what keeps the per-plugin documents small.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "generatedAt", "plugins"],
+  "properties": {
+    "schema": { "type": "integer", "const": 1 },
+    "generatedAt": { "type": "string" },
+    "plugins": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "name", "summary", "publisher", "license", "source", "document"],
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "summary": { "type": "string" },
+          "kind": { "type": "string" },
+          "tags": { "type": "array", "items": { "type": "string" } },
+          "license": { "type": "string" },
+          "source": { "type": "string" },
+          "homepage": { "type": "string" },
+          "publisher": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "name"],
+            "properties": {
+              "id": { "type": "string" },
+              "name": { "type": "string" },
+              "contact": { "type": "string" }
+            }
+          },
+          "latestVersion": { "type": ["string", "null"] },
+          "abis": { "type": "array", "items": { "type": "integer" } },
+          "rids": { "type": "array", "items": { "type": "string" } },
+          "updatedAt": { "type": ["string", "null"] },
+          "document": {
+            "description": "Path of the per-plugin document, relative to the feed base. The console follows this rather than composing a path, so the layout can change without a hub release.",
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}
