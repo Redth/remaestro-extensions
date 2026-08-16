@@ -122,6 +122,13 @@ fifteen megabytes, rather than by failing at the first unknown call.
 What the box must already have. `native` is a self-contained or static executable — one file per
 architecture, no shared runtime. `python3` is present on the appliance and in the container.
 
+**`python3` gets you an interpreter and nothing else, and that is less than it sounds.** `grpcio` is
+a compiled wheel and is on neither box, so a Python plugin vendors it — which makes `python3`
+**exactly as architecture-bound as `native`**, and about three times the size. Measured on the
+reference Python sample: 42 MB unpacked, 12.6 MB in the archive, against 15.5 MB for a
+self-contained, single-file, trimmed .NET build. The appliance's data partition is 3.0 GiB and does
+not grow. Publish per-architecture archives for `python3` exactly as you would for `native`.
+
 There is no `node`: **Node is on neither box**, so a Node plugin ships as `native` (a
 single-executable build) or does not run. Better to read that here than to discover it.
 
@@ -149,6 +156,12 @@ The archive is a gzipped tar with a `plugin.json` at its root. That file is what
 learn what to run, and CI checks it against the submission — `id`, `version` and `abi` must match,
 and `rid` must match the architecture it was published under.
 
+**That file has its own schema and it is not this one.** The normative contract for the manifest
+*inside the archive* is [`docs/plugin-manifest.schema.json`](https://github.com/Redth/remaestro-sdk/blob/main/docs/plugin-manifest.schema.json)
+in the SDK repository, with `docs/driver-protocol.md` §6 as the prose beside it — including the short
+list of places a hub is more forgiving than the schema, which is worth reading before you rely on
+one of them. The block below is a summary; where the two differ, the schema is right.
+
 ```jsonc
 {
   "id": "com.acme.lamp",
@@ -161,10 +174,19 @@ and `rid` must match the architecture it was published under.
 }
 ```
 
-`exec` is an argv relative to the package root, and it must be there and non-empty: without it there
-is nothing to launch. Naming an interpreter here is what saves you smuggling one through a shebang —
+`exec` is an **argv**, and it must be there and non-empty: without it there is nothing to launch. CI
+requires every element to be a non-empty string.
+
+`exec[0]` is **not** simply relative to the package root — it means two things and the manifest does
+not say which. `./acme-lamp` is a file the package shipped and is resolved against the root;
+`python3` is something the box is expected to have and is left for the OS to find on `PATH`. They
+are told apart by whether that path exists inside the package, which is the only rule that needs no
+extra field. Naming an interpreter here is also what saves you smuggling one through a shebang —
 which matters, because a shebang must carry an absolute interpreter path (so `#!/usr/bin/env python3`
 cannot select a virtualenv).
+
+The process is started with the **package root as its working directory**, and with the address it
+must serve on in both `REMAESTRO_DRIVER_URL` and `ASPNETCORE_URLS`.
 
 **The process contract, which is the opinionated part:**
 
