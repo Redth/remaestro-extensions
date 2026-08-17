@@ -28,6 +28,12 @@ on:
       - 'publishers/**'
       - 'tools/registry/**'
       - '.github/workflows/publish-index.yml'
+      # The signing key, because the index has to be re-signed when it changes and nothing else would do
+      # it. This was missing, and it cost exactly what you would expect: `index-1.pub` was committed, no
+      # republish ran, and every hub that fetched the feed got a 404 while the workflow's last run sat
+      # green from before the key existed. A rotation is the same shape and worse — the feed would go on
+      # serving signatures made with a key the field is about to stop trusting.
+      - 'keys/**'
   workflow_dispatch:
 
 permissions:
