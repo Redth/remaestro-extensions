@@ -162,6 +162,7 @@ Detail lives in [docs/manifest.md](docs/manifest.md) (every field, and what it c
 plugins/<id>/plugin.json      one submission per plugin — every version it has published
 publishers/<id>.json          publisher records, including the pinned public keys
 verification/<id>.json        who has been verified, and what was checked — maintainers only
+curation/featured.json        the shop window: what gets shown first — maintainers only
 schema/                       JSON Schema for all five documents
 keys/                         the public half of the index signing key
 tools/registry/               the validator and the index generator

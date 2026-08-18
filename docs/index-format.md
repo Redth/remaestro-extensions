@@ -100,6 +100,15 @@ Schema: [`schema/index-plugin.schema.json`](../schema/index-plugin.schema.json).
 Revoked keys stay in `publisher.keys`. A hub that meets an archive signed by a revoked key has to be
 able to say *which* key, not merely that something is wrong.
 
+`catalog.json` also carries a top-level `featured` block — an order, and at most one plugin with a
+sentence — and the per-plugin document has no field for one and refuses to grow one. **That asymmetry is
+the guarantee, not a detail of layout**: featuring is decoration on browse, and the way that stays true is
+that a hub which never reads this document installs exactly what it would have installed anyway. It is
+editorial rather than evidential — *featured says we put it in the window; it never says anybody checked
+it* — so it carries no tier, no badge and no evidence, and a console that draws it in a tier's visual
+language has turned an opinion into a check. The block is **absent** when nothing is featured rather than
+present and empty, so nothing has to tell those apart. See [featured.md](featured.md).
+
 `catalog.json`'s rows carry `publisher.tier` and **not** the `verification` block. That is the same
 split as everything else here: the browse list needs enough to draw a label and to filter, and the
 evidence somebody would read before acting on it belongs on the document that installs.
