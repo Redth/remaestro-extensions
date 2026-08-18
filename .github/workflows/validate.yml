@@ -47,6 +47,16 @@ jobs:
           # label. An account takeover and a legitimate new key are the same diff; the label is a
           # person asserting they know which one this is.
           REGISTRY_ALLOW_KEY_ROTATION: ${{ contains(github.event.pull_request.labels.*.name, 'key-rotation') && '1' || '0' }}
+          # And the same shape for a publisher verification, for a closely related reason. Deciding
+          # that somebody is who they say they are is a maintainer's judgement, and a submitter's
+          # pull request adding their own verification record is exactly the self-claim the tier
+          # exists to be immune to. A label can only be applied by somebody with write access, so it
+          # is a maintainer asserting they took the decision.
+          #
+          # CODEOWNERS covers the same path, and the two are not redundant: this one is visible to
+          # the validator and fails the run, and that one is enforced by branch protection. Neither
+          # is the other's substitute.
+          REGISTRY_ALLOW_VERIFICATION: ${{ contains(github.event.pull_request.labels.*.name, 'verification') && '1' || '0' }}
         run: |
           python -m registry.validate \
             --repo . \

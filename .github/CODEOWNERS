@@ -1,0 +1,19 @@
+# Who has to review what.
+#
+# `verification/` is the only place a publisher tier comes from, and the tier is the one claim in
+# this registry that a person would act on: `verified` says somebody here checked who a publisher is.
+# A record written by the publisher it is about would be a claim wearing a check's clothes, so this
+# path needs a maintainer's review, and the validator separately refuses a change to it that does not
+# carry the maintainer-only `verification` label.
+#
+# **Two guards on one door, and they are enforced in different places.** The label is what CI can see
+# and fail on. This file only does anything with branch protection set to require review from code
+# owners — which is a repository setting rather than something in the tree, so it is worth checking
+# rather than assuming. See docs/verification.md.
+/verification/  @Redth
+
+# The rules themselves, and the trust statement that goes with them.
+/tools/registry/  @Redth
+/schema/          @Redth
+/keys/            @Redth
+/.github/         @Redth

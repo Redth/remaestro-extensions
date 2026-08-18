@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Redth/remaestro-extensions/schema/verification.schema.json",
+  "title": "reMaestro publisher verification",
+  "description": "One of these lives at verification/<publisher-id>.json and records that somebody here checked control of the name a publisher id claims, and what they checked. It is written by a maintainer and never by the publisher it is about — which is the whole reason it is a separate file rather than a field in publishers/<id>.json, a document its own subject submits. It says who a publisher is. It says nothing whatsoever about whether their plugins are safe; see README.md.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["publisher", "tier", "method", "evidence", "checkedAt", "checkedBy", "status"],
+  "properties": {
+    "$schema": { "type": "string" },
+
+    "publisher": {
+      "description": "The id of a record in publishers/. Must equal this file's name without .json.",
+      "type": "string",
+      "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$",
+      "maxLength": 128
+    },
+
+    "tier": {
+      "description": "Only 'verified' is spellable here, and the omissions are deliberate. 'official' means published by us and comes from the allowlist in tools/registry/policy.py — a diff in our own repository rather than something a domain can buy. 'unverified' is the absence of a record, so writing one to say nothing was checked would be a file whose meaning is that it should not exist. An enum of one, for the same reason 'kind' is: a second tier can be added without invalidating a record already written.",
+      "type": "string",
+      "enum": ["verified"]
+    },
+
+    "method": {
+      "description": "How control of the name was shown. One method today: 'well-known' — reverse the publisher id's labels into a hostname and fetch https://<host>/.well-known/remaestro-publisher.txt, which must carry the line 'remaestro-publisher=<id>'.",
+      "type": "string",
+      "enum": ["well-known"]
+    },
+
+    "evidence": {
+      "description": "The document that was read. It is checked against the URL the publisher id implies and refused if it is anything else: an evidence URL a submitter could choose is a check of whatever they chose to serve.",
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https://"
+    },
+
+    "checkedAt": {
+      "description": "The date a person did this. Evidence is re-fetched by the weekly audit, so this is when somebody judged it rather than when it last resolved.",
+      "type": "string",
+      "format": "date"
+    },
+
+    "checkedBy": {
+      "description": "The maintainer who checked, as a public URL. A name a reader can go and ask.",
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https://"
+    },
+
+    "status": {
+      "description": "'active' or 'withdrawn'. A verification is withdrawn, never deleted — the same rule as a revoked key and a withdrawn version, and for the same reason: 'we checked this and then stopped believing it' is a fact worth being able to read afterwards.",
+      "type": "string",
+      "enum": ["active", "withdrawn"]
+    },
+
+    "withdrawn": {
+      "description": "Required once status is 'withdrawn'. Why it stopped being true — a domain that lapsed, a transfer, a name that turned out to be somebody else's.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["at", "reason"],
+      "properties": {
+        "at": { "type": "string", "format": "date" },
+        "reason": { "type": "string", "minLength": 8, "maxLength": 500 }
+      }
+    },
+
+    "note": {
+      "description": "What a person actually did, for whoever reads this in two years. Not shown anywhere.",
+      "type": "string",
+      "maxLength": 1000
+    }
+  },
+
+  "allOf": [
+    {
+      "if": { "properties": { "status": { "const": "withdrawn" } }, "required": ["status"] },
+      "then": { "required": ["withdrawn"] }
+    }
+  ]
+}

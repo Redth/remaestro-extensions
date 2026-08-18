@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/Redth/remaestro-extensions/schema/submission.schema.json",
   "title": "reMaestro plugin submission",
-  "description": "One of these lives at plugins/<id>/plugin.json and is the whole submission. Unknown fields are rejected rather than ignored: a field we do not understand is a claim we cannot check.",
+  "description": "One of these lives at plugins/<id>/plugin.json and is the whole submission. Unknown fields are rejected rather than ignored: a field we do not understand is a claim we cannot check. There is deliberately no tier, badge or verification field here and there never will be: a tier a publisher writes into their own submission is one they have asserted rather than one anybody checked, and 'additionalProperties: false' is what makes that refusal structural rather than a rule somebody has to remember. Tiers are resolved from verification/ and from tools/registry/policy.py — see docs/verification.md.",
   "type": "object",
   "additionalProperties": false,
   "required": ["id", "name", "summary", "publisher", "kind", "license", "source", "versions"],

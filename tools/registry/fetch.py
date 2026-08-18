@@ -107,6 +107,35 @@ def resolves(url: str, origins: OriginMap) -> str | None:
     return f"{url} did not resolve"
 
 
+def text(url: str, origins: OriginMap, limit: int) -> tuple[str | None, str | None]:
+    """Read a small document as text. Returns (body, None) or (None, why not).
+
+    Its own function rather than `download` with a decode, because what is being read here is a line
+    of text somebody publishes to prove they control a name — not an artifact — and the failure worth
+    reporting is different. A 404 on a publisher's own site is the ordinary case and needs a sentence
+    a person can act on, which is the caller's job to write and this function's job not to swallow.
+    """
+
+    target = origins.apply(url)
+    try:
+        with _open(target) as response:
+            body = response.read(limit + 1)
+    except urllib.error.HTTPError as error:
+        return None, f"{url} answered {error.code}"
+    except urllib.error.URLError as error:
+        return None, f"{url} did not resolve: {error.reason}"
+    except (TimeoutError, OSError) as error:
+        return None, f"{url} could not be read: {error}"
+
+    if len(body) > limit:
+        return None, f"{url} is larger than {limit} bytes, so it is a page rather than the one line expected"
+
+    try:
+        return body.decode("utf-8"), None
+    except UnicodeDecodeError:
+        return None, f"{url} is not UTF-8"
+
+
 def download(url: str, origins: OriginMap, into: str) -> Fetched:
     """Stream to a file, hashing as it goes, and stop dead if it runs long.
 

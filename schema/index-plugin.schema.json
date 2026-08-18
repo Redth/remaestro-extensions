@@ -21,11 +21,27 @@
     "publisher": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "name", "contact", "keys"],
+      "required": ["id", "name", "contact", "tier", "keys"],
       "properties": {
         "id": { "type": "string" },
         "name": { "type": "string" },
         "contact": { "type": "string" },
+        "tier": {
+          "description": "What is known about who this publisher is, and nothing at all about whether their plugin is safe. 'official' is published by us; 'verified' means a maintainer checked that they control the name their id claims; 'unverified' is everybody else and is the default in every sense — a missing field, a withdrawn verification and anything unrecognised all read as this one. Always written by the generator, so a hub never has to infer it.",
+          "type": "string",
+          "enum": ["official", "verified", "unverified"]
+        },
+        "verification": {
+          "description": "Present only when tier is 'verified': what was checked, where, and when. A console can then say which name was checked and on what date, which is a fact somebody can go and confirm. Absent for 'official', because nothing was fetched — we know who we are, and pretending to have checked a URL for it would be theatre.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["method", "evidence", "checkedAt"],
+          "properties": {
+            "method": { "type": "string" },
+            "evidence": { "type": "string" },
+            "checkedAt": { "type": "string" }
+          }
+        },
         "keys": {
           "type": "array",
           "minItems": 1,

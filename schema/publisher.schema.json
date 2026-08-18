@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/Redth/remaestro-extensions/schema/publisher.schema.json",
   "title": "reMaestro plugin publisher",
-  "description": "One of these lives at publishers/<id>.json. A publisher is a first-class record rather than a string in a manifest, because everything that later attaches to a publisher — a second plugin, a key rotation, a payee — has to attach to something.",
+  "description": "One of these lives at publishers/<id>.json. A publisher is a first-class record rather than a string in a manifest, because everything that later attaches to a publisher — a second plugin, a key rotation, a payee — has to attach to something. This file is submitted by the publisher it describes, which is exactly why it carries no tier: a verification written by its own subject is a claim, not a check. That record lives in verification/<id>.json, which only a maintainer writes — see docs/verification.md.",
   "type": "object",
   "additionalProperties": false,
   "required": ["id", "name", "contact", "keys"],

@@ -66,3 +66,49 @@ HTTP_TIMEOUT = 30
 # The only signature algorithm, and it is the one the hub already verifies releases with:
 # ECDSA P-256, SHA-256, DER-encoded, over the artifact bytes as received.
 SIGNATURE_ALGORITHM = "ecdsa-p256-sha256"
+
+# ---------------------------------------------------------------------------------------------
+# Publisher tiers
+#
+# Three, and each says exactly one thing about *who a publisher is*:
+#
+#   official    published by us.
+#   verified    somebody here checked that this publisher controls the name their id claims.
+#   unverified  nobody checked. The name beside the plugin is a claim they made.
+#
+# **None of them says a plugin is safe, and none of them ever can.** Installing a plugin runs an
+# arbitrary binary with the hub's own privileges; provenance is the only control that exists, and a
+# tier is provenance about the *publisher* rather than about the code. A tier that reads as a safety
+# claim is the one lie in this repository somebody would act on. See README.md.
+TIERS = ("official", "verified", "unverified")
+
+# The publisher ids this project publishes under. **This tuple is the whole of `official`** — it is
+# not a field, not a label and not something a submission can carry, so there is no diff a stranger
+# can open that puts them in it. Adding one is a change to our own source, reviewed like any other.
+OFFICIAL_PUBLISHERS = ("app.remaestro",)
+
+# How control of a name is shown. One method, and the reason there is only one is testability: the
+# suite serves every byte from loopback through an origin map, and a DNS TXT check — the obvious
+# alternative — could never be made to refuse anything in a test. A rule nobody has watched refuse
+# something is not a rule, which is what tests/test_registry.py exists to say.
+VERIFICATION_METHODS = ("well-known",)
+
+# The document a publisher publishes to show they control the name. Its location is **derived from
+# the publisher id** and never supplied by the submitter: an evidence URL somebody could choose is a
+# check of whatever they chose to serve.
+#
+#   com.acme        -> https://acme.com/.well-known/remaestro-publisher.txt
+#   io.github.acme  -> https://acme.github.io/.well-known/remaestro-publisher.txt
+#
+# The second is GitHub Pages for that owner, so one rule covers a domain and a GitHub account
+# without a second method and without the GitHub API, whose 60-requests-an-hour ceiling is shared by
+# every runner on a cloud provider.
+WELL_KNOWN_PATH = "/.well-known/remaestro-publisher.txt"
+
+# The line that document must carry. Exact, so a page that merely mentions a publisher id in prose
+# is not evidence of anything.
+WELL_KNOWN_KEY = "remaestro-publisher"
+
+# Evidence is a line of text. Anything larger is a page that happens to be served there, and reading
+# it is somebody else choosing how much of our runner's memory to use.
+MAX_EVIDENCE_BYTES = 64 * 1024

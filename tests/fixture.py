@@ -27,10 +27,25 @@ import threading
 
 ARTIFACT_ORIGIN = "https://artifacts.example.invalid"
 
-PUBLISHER_ID = "com.example"
-PLUGIN_ID = "com.example.lamp"
+# A publisher's verification evidence is fetched from a URL **derived from their id** — reverse the
+# labels — so the fixture's id is chosen for where it reverses to rather than for how it reads:
+# `invalid.example` claims `example.invalid`, which RFC 2606 reserves and which cannot resolve. A run
+# that loses its origin map therefore fails by failing to connect, exactly as the artifact origin
+# does, rather than by quietly reaching somebody's real website. `com.example` would have reversed to
+# `example.com`, which resolves.
+PUBLISHER_ID = "invalid.example"
+PUBLISHER_ORIGIN = "https://example.invalid"
+EVIDENCE_PATH = "/.well-known/remaestro-publisher.txt"
+EVIDENCE_URL = f"{PUBLISHER_ORIGIN}{EVIDENCE_PATH}"
+
+PLUGIN_ID = "invalid.example.lamp"
 KEY_ID = "2026-01"
 RIDS = ("linux-arm64", "linux-x64")
+
+# Written out here rather than imported from `registry.policy`, deliberately. A test that computes
+# what it expects with the same constant the validator computes it from agrees with itself whatever
+# either of them says; this one fails if the published contract is quietly reworded.
+EVIDENCE_KEY = "remaestro-publisher"
 
 
 def run(*args: str, cwd: str | None = None, stdin: bytes | None = None) -> bytes:
@@ -108,7 +123,14 @@ class Server:
 
     @property
     def origin_map(self) -> str:
-        return f"{ARTIFACT_ORIGIN}=http://127.0.0.1:{self.port}"
+        """Two origins, one server. The artifacts are one host and a publisher's own site is another
+        — and they have to be two, because the whole point of the verification check is that the
+        evidence lives somewhere the *publisher id* names rather than somewhere a submission points
+        at. Serving both from one directory keeps the fixture small; the validator still resolves the
+        evidence URL from the id and cannot be handed one."""
+
+        return (f"{ARTIFACT_ORIGIN}=http://127.0.0.1:{self.port},"
+                f"{PUBLISHER_ORIGIN}=http://127.0.0.1:{self.port}")
 
     def close(self) -> None:
         self._httpd.shutdown()
@@ -132,6 +154,17 @@ def build(scratch: str) -> dict:
     os.makedirs(os.path.join(artifacts, "source"), exist_ok=True)
     with open(os.path.join(artifacts, "source", "lamp"), "w", encoding="utf-8") as handle:
         handle.write("a stand-in for the plugin's source repository\n")
+
+    # The publisher's own well-known document — the one thing that makes `verified` mean anything.
+    # A real file, served over real HTTP from the place the publisher id names, so both the location
+    # rule and the content rule can be sabotaged and watched to refuse.
+    write_evidence(artifacts, f"{EVIDENCE_KEY}={PUBLISHER_ID}\n")
+
+    # The same document, correctly worded, at a location the *submitter* chose rather than the one
+    # their id implies. Every content check passes on it; only the derivation rule refuses it, which
+    # is the attack the derivation exists to stop.
+    with open(os.path.join(artifacts, "chosen-evidence.txt"), "w", encoding="utf-8") as handle:
+        handle.write(f"{EVIDENCE_KEY}={PUBLISHER_ID}\n")
 
     keys = os.path.join(scratch, "keys")
     os.makedirs(keys, exist_ok=True)
@@ -213,6 +246,7 @@ def _lay_out_repo(repo: str, publisher_key: Keypair, archives: dict) -> None:
     shutil.copytree(os.path.join(here, "tools"), os.path.join(repo, "tools"))
     os.makedirs(os.path.join(repo, "publishers"), exist_ok=True)
     os.makedirs(os.path.join(repo, "plugins", PLUGIN_ID), exist_ok=True)
+    os.makedirs(os.path.join(repo, "verification"), exist_ok=True)
 
     write_json(os.path.join(repo, "publishers", f"{PUBLISHER_ID}.json"), {
         "id": PUBLISHER_ID,
@@ -228,6 +262,11 @@ def _lay_out_repo(repo: str, publisher_key: Keypair, archives: dict) -> None:
     })
 
     write_json(plugin_path(repo), plugin_manifest(archives, versions=("1.0.0",)))
+
+    # Verified as of the base ref, so the clean control exercises a registry that already has a tier
+    # in it — which is what makes "an unchanged verification is not re-fetched and needs no label"
+    # and "a changed one needs both" two different, separately observable behaviours.
+    write_json(verification_path(repo), verification_record())
 
     run("git", "init", "-q", "-b", "main", repo)
     run("git", "-C", repo, "config", "user.email", "tests@example.invalid")
@@ -245,6 +284,42 @@ def plugin_path(repo: str) -> str:
 
 def publisher_path(repo: str) -> str:
     return os.path.join(repo, "publishers", f"{PUBLISHER_ID}.json")
+
+
+def verification_path(repo: str, publisher_id: str = PUBLISHER_ID) -> str:
+    return os.path.join(repo, "verification", f"{publisher_id}.json")
+
+
+def verification_record(publisher_id: str = PUBLISHER_ID) -> dict:
+    """A maintainer's record that this publisher controls the name their id claims.
+
+    Note what is *not* in it: nothing a publisher submits. This document lives in a directory the
+    publisher cannot write to, and the URL in it is the one their id implies rather than one they
+    supplied — both of which the suite sabotages below.
+    """
+
+    return {
+        "publisher": publisher_id,
+        "tier": "verified",
+        "method": "well-known",
+        "evidence": f"{PUBLISHER_ORIGIN}{EVIDENCE_PATH}",
+        "checkedAt": "2026-02-01",
+        "checkedBy": "https://github.com/example-maintainer",
+        "status": "active",
+    }
+
+
+def write_evidence(artifacts: str, body: str) -> None:
+    """(Re)write the document the publisher serves at their well-known path."""
+
+    directory = os.path.join(artifacts, ".well-known")
+    os.makedirs(directory, exist_ok=True)
+    with open(os.path.join(directory, "remaestro-publisher.txt"), "w", encoding="utf-8") as handle:
+        handle.write(body)
+
+
+def evidence_file(artifacts: str) -> str:
+    return os.path.join(artifacts, ".well-known", "remaestro-publisher.txt")
 
 
 def plugin_manifest(archives: dict, versions=("1.0.0", "1.1.0")) -> dict:

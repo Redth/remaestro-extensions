@@ -57,6 +57,14 @@ this repository rather than a string in your manifest, because everything that l
 publisher — a second plugin, a key rotation, a payee — has to attach to something. It cannot change
 after the first publication.
 
+> **There is no tier field here, and there will not be one.** A publisher's tier — `official`,
+> `verified`, `unverified` — is resolved from a maintainer's record in `verification/`, never from
+> anything you submit: a tier written into your own manifest is one you asserted rather than one
+> anybody checked, and since this schema refuses unknown fields, writing one is a failed build rather
+> than a claim that slips through. [docs/verification.md](verification.md) is how to get verified, and
+> what it does and does not say — **verified means we checked who a publisher is; it never means a
+> plugin is safe.**
+
 **`license`** — an SPDX identifier from the list in
 [`tools/registry/policy.py`](../tools/registry/policy.py). Required from your first submission even
 though only free licences are accepted today, because adding a required field later would invalidate

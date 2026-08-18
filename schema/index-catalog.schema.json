@@ -27,11 +27,16 @@
           "publisher": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["id", "name"],
+            "required": ["id", "name", "tier"],
             "properties": {
               "id": { "type": "string" },
               "name": { "type": "string" },
-              "contact": { "type": "string" }
+              "contact": { "type": "string" },
+              "tier": {
+                "description": "Enough to draw a chip and to filter on, and no more: what was checked and when lives in the per-plugin document, which is the one somebody is reading when they are about to install. Says who a publisher is; never that a plugin is safe.",
+                "type": "string",
+                "enum": ["official", "verified", "unverified"]
+              }
             }
           },
           "latestVersion": { "type": ["string", "null"] },

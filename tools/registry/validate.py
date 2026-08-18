@@ -23,7 +23,7 @@ import tempfile
 from dataclasses import dataclass
 from typing import Any
 
-from . import fetch, gitref, policy
+from . import fetch, gitref, policy, verification
 
 REPO_ROOT_MARKERS = ("schema", "plugins", "publishers")
 
@@ -106,15 +106,17 @@ def check_schema(report: Report, validator, document: Any, where: str) -> bool:
 # layout and identity
 
 
-def check_layout(report: Report, repo: str) -> tuple[list[str], list[str]]:
-    """Returns (publisher files, plugin directories). Anything unexpected in either tree is a
-    failure rather than a shrug — a stray file in `plugins/` is either a mistake or an attempt to
-    make one look ordinary."""
+def check_layout(report: Report, repo: str) -> tuple[list[str], list[str], list[str]]:
+    """Returns (publisher files, plugin directories, verification files). Anything unexpected in any
+    of the three trees is a failure rather than a shrug — a stray file in `plugins/` is either a
+    mistake or an attempt to make one look ordinary."""
 
     publishers_dir = os.path.join(repo, "publishers")
     plugins_dir = os.path.join(repo, "plugins")
+    verification_dir = os.path.join(repo, "verification")
     publisher_files: list[str] = []
     plugin_dirs: list[str] = []
+    verification_files: list[str] = []
 
     for entry in sorted(os.listdir(publishers_dir)) if os.path.isdir(publishers_dir) else []:
         if entry in ("README.md", ".gitkeep"):
@@ -147,7 +149,21 @@ def check_layout(report: Report, repo: str) -> tuple[list[str], list[str]]:
                             "and a digest, never the bytes")
         plugin_dirs.append(entry)
 
-    return publisher_files, plugin_dirs
+    # A missing verification/ is "nobody is verified", which is the registry's state today and is not
+    # an error. What is an error is a stray file in it: this directory is the one place a tier comes
+    # from, so anything in it that is not a record is either a mistake or something shaped to be
+    # mistaken for one.
+    for entry in sorted(os.listdir(verification_dir)) if os.path.isdir(verification_dir) else []:
+        if entry in ("README.md", ".gitkeep"):
+            continue
+        full = os.path.join(verification_dir, entry)
+        if not os.path.isfile(full) or not entry.endswith(".json"):
+            report.fail("LAYOUT_UNEXPECTED_FILE", f"verification/{entry}",
+                        "verification/ holds one <publisher-id>.json per verified publisher and nothing else")
+            continue
+        verification_files.append(entry)
+
+    return publisher_files, plugin_dirs, verification_files
 
 
 # ---------------------------------------------------------------------------------------------
@@ -231,6 +247,115 @@ def _check_keys_pinned(report: Report, where: str, previous: dict, current: dict
                     f"this pull request adds key(s) {', '.join(sorted(added))} to a publisher that already "
                     "has one. A rotation is a deliberate, human-reviewed operation: it needs the "
                     "'key-rotation' label, because an account takeover looks exactly like this")
+
+
+# ---------------------------------------------------------------------------------------------
+# verifications
+
+
+def check_verifications(report: Report, repo: str, files: list[str], validator,
+                        publishers: dict[str, dict], base_ref: str | None, origins: fetch.OriginMap,
+                        offline: bool, allow_verification: bool, recheck_all: bool) -> dict[str, dict]:
+    """The `verified` tier, and the two questions it has to survive.
+
+    **Who wrote this?** A tier a publisher asserts is worthless, so the record does not live in any
+    document a publisher submits — it lives here, and a pull request that touches this directory
+    needs a maintainer's label, exactly as a key rotation does. That check and CODEOWNERS are two
+    different guards on the same door: the label is what this validator can see, and branch
+    protection requiring a code owner's review is what the repository can enforce. Neither is the
+    other's substitute and the docs say which is which.
+
+    **Is it still true?** The evidence is re-read rather than remembered. Its location is derived
+    from the publisher id, so nothing here follows a URL somebody chose, and the weekly audit
+    re-fetches every record — which is what notices a domain that has lapsed or changed hands since
+    the day a person looked at it.
+    """
+
+    found: dict[str, dict] = {}
+
+    for name in files:
+        where = f"verification/{name}"
+        document, problem = load_json(os.path.join(repo, "verification", name))
+        if problem is not None:
+            report.fail("SCHEMA_INVALID", where, problem)
+            continue
+        if not check_schema(report, validator, document, where):
+            continue
+
+        expected_id = name[: -len(".json")]
+        if document["publisher"] != expected_id:
+            report.fail("VERIFICATION_ID_MISMATCH", where,
+                        f"the record verifies {document['publisher']!r} and the file is named "
+                        f"{expected_id!r}. The file name is the publisher, so a record can never be about "
+                        "one publisher while counting for another")
+            continue
+
+        if expected_id not in publishers:
+            report.fail("PUBLISHER_UNKNOWN", where,
+                        f"there is no publishers/{expected_id}.json. Verifying a publisher who has no record "
+                        "is a tier attached to nothing")
+            continue
+
+        if expected_id in policy.OFFICIAL_PUBLISHERS:
+            report.fail("VERIFICATION_REDUNDANT", where,
+                        f"{expected_id!r} is one of ours and is already official, which is decided in "
+                        "tools/registry/policy.py. A verification record beside it would be a second, weaker "
+                        "answer to a question that already has one")
+            continue
+
+        # Added or edited, either of which is a maintainer deciding something. A record that has sat
+        # in the tree since before this pull request is not.
+        #
+        # **Whether this is a change is a property of the difference, so with no base ref there is no
+        # question to answer** — the same reason `_check_keys_pinned` is skipped there rather than
+        # guessed at. Without one, every record looks new, and refusing the whole tree for want of a
+        # label a local run cannot have is a check that has stopped being about anything. CI always
+        # passes a base ref, and the report says so in a note.
+        previous = gitref.read_json_at(repo, base_ref, where) if base_ref is not None else None
+        changed = base_ref is not None and previous != document
+
+        if changed and not allow_verification:
+            report.fail("VERIFICATION_UNAPPROVED", where,
+                        "this pull request writes a verification. Only a maintainer decides that somebody is "
+                        "who they say they are, so it needs the 'verification' label — a submitter opening "
+                        "this diff is exactly the self-claim the tier exists to be immune to")
+
+        # Unchanged records are not re-fetched on a pull request, for the same reason an untouched
+        # archive is not: a submission should cost what it proposes and not what everybody else
+        # published. The audit runs with --recheck-all and re-reads every one of them.
+        #
+        # With no base ref, read them all: "did this change" is unanswerable there, and re-reading a
+        # document is the half of this check that needs no history at all.
+        if document["status"] == "active" and not offline and (changed or recheck_all or base_ref is None):
+            failure = verification.check_evidence(expected_id, document, origins)
+            if failure is not None:
+                report.fail(failure[0], where, failure[1])
+                continue
+
+        found[expected_id] = document
+
+    _check_verifications_append_only(report, repo, base_ref, files)
+
+    return found
+
+
+def _check_verifications_append_only(report: Report, repo: str, base_ref: str | None,
+                                     files: list[str]) -> None:
+    """A verification is withdrawn, never deleted — the rule a revoked key and a withdrawn version
+    already follow, and it matters here for the same reason. *"We checked this and then stopped
+    believing it"* is a fact worth being able to read afterwards; a file that quietly disappears
+    leaves a publisher who was verified last week looking as though they never were."""
+
+    if base_ref is None:
+        return
+
+    present = set(files)
+    for path in gitref.paths_at(repo, base_ref, "verification"):
+        name = os.path.basename(path)
+        if name.endswith(".json") and name not in present:
+            report.fail("VERIFICATION_REMOVED", f"verification/{name}",
+                        "this verification was deleted. Set status to 'withdrawn' with a reason instead — the "
+                        "history of what we once checked is what a later reader has to be able to see")
 
 
 # ---------------------------------------------------------------------------------------------
@@ -507,7 +632,8 @@ def _check_archive_contents(report: Report, where: str, document: dict, version:
 
 
 def validate(repo: str, base_ref: str | None, origins: fetch.OriginMap,
-             offline: bool, allow_rotation: bool, recheck_all: bool = False) -> Report:
+             offline: bool, allow_rotation: bool, recheck_all: bool = False,
+             allow_verification: bool = False) -> Report:
     report = Report()
 
     for marker in REPO_ROOT_MARKERS:
@@ -520,8 +646,9 @@ def validate(repo: str, base_ref: str | None, origins: fetch.OriginMap,
         raise SystemExit(2)
 
     if base_ref is None:
-        report.note("no base ref given, so nothing was checked about pinning, reassignment or edits to "
-                    "published versions. CI always passes one.")
+        report.note("no base ref given, so nothing was checked about pinning, reassignment, edits to "
+                    "published versions, or whether a verification in this tree is one a maintainer "
+                    "approved. CI always passes one.")
     if offline:
         report.note("offline, so no URL was fetched, no digest was checked and no signature was verified. "
                     "CI never runs this way.")
@@ -531,9 +658,12 @@ def validate(repo: str, base_ref: str | None, origins: fetch.OriginMap,
 
     submission = schema_validator(repo, "submission.schema.json")
     publisher_schema = schema_validator(repo, "publisher.schema.json")
+    verification_schema = schema_validator(repo, "verification.schema.json")
 
-    publisher_files, plugin_dirs = check_layout(report, repo)
+    publisher_files, plugin_dirs, verification_files = check_layout(report, repo)
     publishers = check_publishers(report, repo, publisher_files, publisher_schema, base_ref, allow_rotation)
+    check_verifications(report, repo, verification_files, verification_schema, publishers, base_ref,
+                        origins, offline, allow_verification, recheck_all)
     check_plugins(report, repo, plugin_dirs, submission, publishers, base_ref, origins, offline, recheck_all)
 
     return report
@@ -553,6 +683,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--allow-key-rotation", action="store_true",
                         help="permit a publisher to add a key. Set by CI only when the PR carries the "
                              "'key-rotation' label.")
+    parser.add_argument("--allow-verification", action="store_true",
+                        help="permit this change to write a publisher verification. Set by CI only when the "
+                             "PR carries the 'verification' label, which only a maintainer can apply.")
     parser.add_argument("--origin-map", default=os.environ.get("REGISTRY_ORIGIN_MAP"),
                         help="rewrite URL prefixes before fetching, 'from=to' comma separated. Test suite only.")
     parser.add_argument("--json", action="store_true", help="emit findings as JSON")
@@ -565,8 +698,9 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     allow_rotation = args.allow_key_rotation or os.environ.get("REGISTRY_ALLOW_KEY_ROTATION") == "1"
+    allow_verification = args.allow_verification or os.environ.get("REGISTRY_ALLOW_VERIFICATION") == "1"
     report = validate(os.path.abspath(args.repo), args.base_ref, origins, args.offline,
-                      allow_rotation, args.recheck_all)
+                      allow_rotation, args.recheck_all, allow_verification)
 
     if args.json:
         print(json.dumps({

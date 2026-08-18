@@ -63,6 +63,17 @@ Schema: [`schema/index-plugin.schema.json`](../schema/index-plugin.schema.json).
     "id": "com.acme",
     "name": "Acme Ltd",
     "contact": "https://github.com/acme",
+
+    // Who they are, and never whether their plugin is safe. Always written, so a hub never infers it.
+    "tier": "verified",
+    // Only for "verified", and never for "official", where nothing was fetched. What was checked,
+    // where, and when — so a console can name the domain instead of drawing a tick.
+    "verification": {
+      "method": "well-known",
+      "evidence": "https://acme.com/.well-known/remaestro-publisher.txt",
+      "checkedAt": "2026-08-18"
+    },
+
     "keys": [
       { "id": "2026-01", "algorithm": "ecdsa-p256-sha256", "publicKey": "…base64 SPKI…", "status": "active" }
     ]
@@ -88,6 +99,14 @@ Schema: [`schema/index-plugin.schema.json`](../schema/index-plugin.schema.json).
 
 Revoked keys stay in `publisher.keys`. A hub that meets an archive signed by a revoked key has to be
 able to say *which* key, not merely that something is wrong.
+
+`catalog.json`'s rows carry `publisher.tier` and **not** the `verification` block. That is the same
+split as everything else here: the browse list needs enough to draw a label and to filter, and the
+evidence somebody would read before acting on it belongs on the document that installs.
+[docs/verification.md](verification.md) is where the tiers come from and what they are allowed to
+mean. **A tier is not the signature and must never be rendered as though it were** — what is verified
+about an archive is its digest and the publisher key it was signed with, and that check is about the
+bytes rather than about a person.
 
 ## What a hub is expected to do with it
 

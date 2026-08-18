@@ -31,18 +31,46 @@ What this registry can honestly tell you before you install:
 |---|---|
 | These are the exact bytes the registry listed | **Yes.** A SHA-256 in a signed index, checked against what was downloaded. |
 | This update came from whoever published the first version | **Yes.** Publisher keys are pinned on first publication. This is the highest-value signal here, and the console should say so loudly when it changes. |
-| Who the publisher is | **A claim.** A name and a link they gave us. Nobody verifies identity. |
+| Who the publisher is | **Sometimes.** A publisher is `official` (published by us), `verified` (we checked they control the name their id claims), or `unverified` (nobody checked, and the name is a claim they gave us). See [tiers](#publisher-tiers-and-the-one-thing-they-do-not-mean). |
 | Which source it says it was built from | **A link.** Recorded, and checked that it resolves. |
 | That the binary matches that source | **No.** Only building it ourselves would show that, and we do not. |
 | That the plugin is safe, or does what it says | **No.** Nothing static can tell you this, and under a trusted model a plugin can do anything the hub can. |
-
-There is no verified badge here and there will not be one. A green tick over somebody else's binary
-would be a claim we cannot make.
 
 The counterweights are real, and they are about recovery rather than prevention: the hub can stop and
 remove a plugin without its cooperation, plugin updates are **off by default and per plugin**, and
 every plugin's publisher and source stay visible in the console permanently rather than only at
 install.
+
+---
+
+## Publisher tiers, and the one thing they do not mean
+
+**Verified means we checked who a publisher is. It never means a plugin is safe.**
+
+There is no safety badge here and there will not be one. A green tick over somebody else's binary
+would be a claim we cannot make — the table above is the whole of what anyone can honestly say before
+installing, and nothing on this page changes a line of it.
+
+What a tier does say is who published something:
+
+| | |
+|---|---|
+| **official** | Published by us. Decided by a tuple in our own source, so there is no diff a stranger can open that puts them in it. |
+| **verified** | A maintainer checked that this publisher controls the name their id claims — a domain, or a GitHub account — against a document at a URL **derived from their publisher id** rather than one they supplied. |
+| **unverified** | Nobody checked. The name beside the plugin is a claim they made. This is the ordinary state and is not a mark against anyone. |
+
+A tier is written by a maintainer in `verification/`, never by the publisher it is about: the manifest
+and the publisher record are both submitted by their own subject, so neither has a tier field and both
+refuse an unknown one. Evidence is re-read weekly rather than remembered, and a verification that
+stops being true is withdrawn — with the record kept, because *"we checked this and then stopped
+believing it"* is worth being able to read afterwards.
+
+**CI proves control of a name. It cannot prove identity, and nothing pretends it does.** Whether
+whoever controls `acme.com` is Acme Ltd is a judgement a person makes, and the judgement is the part a
+badge would be claiming.
+
+Everything else — what counts as evidence, the `.nojekyll` trap on GitHub Pages, and exactly which
+half CI enforces — is in [docs/verification.md](docs/verification.md).
 
 ---
 
@@ -59,6 +87,10 @@ on intent rather than on syntax. CI refuses a submission that has:
 - an archive **not signed by a key that publisher was pinned to on their first publication**;
 - a new key added to an existing publisher without a maintainer's explicit approval;
 - an already-published version that has been edited, deleted, or repointed at different bytes;
+- a **publisher tier claimed by the publisher** — the manifest and the publisher record have no such
+  field, so writing one is an unknown field and is refused;
+- a **verification** written without a maintainer's label, pointing at evidence anywhere but the URL
+  the publisher id implies, or whose evidence no longer says what it said;
 - an archive whose own `plugin.json` disagrees with the submission, is missing, or has nothing to
   launch;
 - an architecture silently missing, an unsupported `abi`, a licence we do not carry, or an archive
@@ -113,12 +145,13 @@ Detail lives in [docs/manifest.md](docs/manifest.md) (every field, and what it c
 ```
 plugins/<id>/plugin.json      one submission per plugin — every version it has published
 publishers/<id>.json          publisher records, including the pinned public keys
-schema/                       JSON Schema for all four documents
+verification/<id>.json        who has been verified, and what was checked — maintainers only
+schema/                       JSON Schema for all five documents
 keys/                         the public half of the index signing key
 tools/registry/               the validator and the index generator
 tools/sign-index.sh           the signing step
 tests/test_registry.py        sabotages every rule above and watches CI refuse it
-docs/                         the manifest, the index format, signing
+docs/                         the manifest, the index format, signing, verification
 index/                        generated and published by CI — not committed here
 LICENSE                       MIT, and it covers this repository's own files and the manifests in it
 ```

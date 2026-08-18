@@ -23,6 +23,7 @@ import json
 import os
 import sys
 
+from . import verification
 from .validate import load_json
 
 
@@ -49,6 +50,12 @@ def build(repo: str, generated_at: str | None = None) -> tuple[dict[str, dict], 
             raise SystemExit(f"publishers/{name}: {problem}")
         publishers[document["id"]] = document
 
+    # Tiers are resolved here rather than carried in a submission, because no document a publisher
+    # writes is allowed to say what tier they are in. `official` comes from a tuple in our own source
+    # and `verified` from a maintainer-written record; everything else is `unverified`, including
+    # every way this can go wrong. See registry/verification.py.
+    verifications = verification.records(repo)
+
     documents: dict[str, dict] = {}
     catalogue: list[dict] = []
 
@@ -62,6 +69,8 @@ def build(repo: str, generated_at: str | None = None) -> tuple[dict[str, dict], 
             raise SystemExit(f"plugins/{entry}/plugin.json: {problem}")
 
         publisher = publishers[plugin["publisher"]]
+        tier = verification.tier_of(publisher["id"], verifications)
+        checked = verification.published(verifications.get(publisher["id"]))
 
         latest: dict[str, dict] = {}
         withdrawn: list[dict] = []
@@ -100,6 +109,9 @@ def build(repo: str, generated_at: str | None = None) -> tuple[dict[str, dict], 
                 "id": publisher["id"],
                 "name": publisher["name"],
                 "contact": publisher["contact"],
+                # Always written, never omitted — a hub that has to infer "unverified" from a missing
+                # field is a hub one bug away from inferring something better instead.
+                "tier": tier,
                 # Every pinned key, revoked ones included. A hub that meets an archive signed by a
                 # revoked key has to be able to say which key, not just that something is wrong.
                 "keys": [
@@ -111,6 +123,12 @@ def build(repo: str, generated_at: str | None = None) -> tuple[dict[str, dict], 
             "withdrawn": withdrawn,
             "generatedAt": stamp,
         }
+        # What was checked, where, and when — carried in the per-plugin document and not in the
+        # catalogue. A console that says "the registry checked control of acme.com on 18 August 2026"
+        # has given somebody a fact they can go and confirm; a tick has given them a feeling.
+        if tier == "verified" and checked is not None:
+            document["publisher"]["verification"] = checked
+
         for optional in ("description", "homepage", "tags"):
             if optional in plugin:
                 document[optional] = plugin[optional]
@@ -127,7 +145,11 @@ def build(repo: str, generated_at: str | None = None) -> tuple[dict[str, dict], 
             "kind": plugin["kind"],
             "license": plugin["license"],
             "source": plugin["source"],
-            "publisher": {"id": publisher["id"], "name": publisher["name"], "contact": publisher["contact"]},
+            # The tier and nothing else about it: the browse list needs enough to draw a chip and to
+            # filter, and the evidence a person would read before acting on it belongs on the path
+            # that installs, which is the per-plugin document.
+            "publisher": {"id": publisher["id"], "name": publisher["name"],
+                          "contact": publisher["contact"], "tier": tier},
             "latestVersion": newest["version"] if newest else None,
             "abis": sorted(int(a) for a in latest),
             "rids": rids,

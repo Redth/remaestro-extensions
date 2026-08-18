@@ -46,7 +46,23 @@ plugin you publish must be signed by it**. Losing it means you cannot publish an
 ```
 
 `name` and `contact` are shown beside every one of your plugins, permanently. They are a claim rather
-than an identity check, and the console says so.
+than an identity check unless you get verified, and the console says which.
+
+**Optional: get verified.** Publish a document at the URL your publisher id implies —
+`com.acme` means `https://acme.com/.well-known/remaestro-publisher.txt`, `io.github.acme` means
+`https://acme.github.io/...` — containing the line `remaestro-publisher=com.acme`, and say so in your
+pull request. A maintainer reads it, and if it holds up they add a record in `verification/`. You
+cannot write that record yourself and there is no field in this file for it: a tier its own subject
+writes is a tier nobody checked.
+
+**Verified means we checked who a publisher is. It never means a plugin is safe.** It is an identity
+signal and nothing more — your plugin still runs with the hub's own privileges either way, and being
+unverified is the ordinary state rather than a mark against you.
+
+If you are on GitHub Pages, commit an empty `.nojekyll` at the root of the repository Pages builds
+from, or Jekyll will drop `.well-known/` from your site and the file will be in your repository and
+not on the web. Full detail, including what CI checks and what a person decides:
+[docs/verification.md](docs/verification.md).
 
 ---
 
@@ -123,9 +139,14 @@ household, we do not check the binary against the source you linked, and we neve
 A signature from this project over your binary would read as a warranty to the person installing it,
 and there is no warranty to give: your plugin runs with the hub's own privileges on their box.
 
-If your description implies otherwise — "verified", "certified", "safe", "sandboxed" — you will be
+If your description implies otherwise — "certified", "safe", "sandboxed", "audited" — you will be
 asked to change it before merge. That is not pedantry about wording. Somebody reads that sentence
 and then decides whether to run your code as root on the machine that holds their house keys.
+
+**That includes the tier.** The registry may say you are `verified`, and it means one thing: somebody
+here checked you control the name your id claims. Writing "verified" in your own summary or
+description, in any sense beyond that, is the same claim under a different heading and is refused for
+the same reason.
 
 By submitting you are also confirming you have the right to distribute what you are publishing, under
 the licence you declared.
@@ -155,6 +176,9 @@ of them.
   of band.
 - **Committing an artifact into this repository.** The registry carries URLs and digests; it never
   carries bytes.
+- **A tier written into your own submission.** There is no field for it in either document you
+  submit, so it arrives as an unknown field and is refused. A verification is a maintainer's record
+  of something they checked, in a directory you cannot write to.
 - **Copy that implies review means safety.**
 
 ## Withdrawing something
