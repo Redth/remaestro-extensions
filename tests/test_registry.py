@@ -37,6 +37,12 @@ ROOT = os.path.dirname(HERE)
 # below; if you reword it, reword it in all four places or the suite says which one you missed.
 TIER_DISCLAIMER = "Verified means we checked who a publisher is. It never means a plugin is safe."
 
+# The same job, one authority further out. A tier is refused unless something can be shown; featuring
+# is refused unless a maintainer asked for it, and there is nothing to show either way. Rendering the
+# two as two kinds of badge is the single mistake this whole area is shaped to make unavailable, so
+# the sentence that says so is asserted against the documents rather than trusted to stay written.
+FEATURED_DISCLAIMER = "Featured says we put it in the window. It never says anybody checked it."
+
 
 class Outcome:
     def __init__(self, returncode: int, payload: dict, stderr: str) -> None:
@@ -57,7 +63,7 @@ class Outcome:
 
 def run_validator(repo: str, origin_map: str, *, base_ref: str | None = "HEAD",
                   allow_rotation: bool = False, recheck_all: bool = False,
-                  allow_verification: bool = False) -> Outcome:
+                  allow_verification: bool = False, allow_curation: bool = False) -> Outcome:
     args = [sys.executable, "-m", "registry.validate", "--repo", repo, "--json",
             "--origin-map", origin_map]
     if base_ref:
@@ -68,6 +74,8 @@ def run_validator(repo: str, origin_map: str, *, base_ref: str | None = "HEAD",
         args.append("--recheck-all")
     if allow_verification:
         args.append("--allow-verification")
+    if allow_curation:
+        args.append("--allow-curation")
 
     env = dict(os.environ, PYTHONPATH=os.path.join(ROOT, "tools"))
     result = subprocess.run(args, capture_output=True, text=True, env=env, cwd=ROOT)
@@ -463,6 +471,147 @@ def verification_rechecked(repo, ctx):
     fixture.write_json(fixture.verification_path(repo), record)
 
 
+# ---- featuring: the shop window, and the four ways to point it at nothing --------------------
+#
+# Read these against the tier sabotages above, because the pair is the point. A tier is refused
+# unless the evidence still resolves at a URL nobody chose; featuring has no evidence, and every
+# check below is about the *window* rather than about the plugin — is somebody with write access
+# asking, does it point at something, and does it distinguish anything. Nothing here can decide
+# whether a plugin deserves to be featured, and nothing here pretends to.
+
+
+def _featured(repo):
+    return fixture.read_json(fixture.featured_path(repo))
+
+
+def _write_featured(repo, document):
+    fixture.write_json(fixture.featured_path(repo), document)
+
+
+def a_plugin_featuring_itself(repo, ctx):
+    """**The self-claim, in the document a submitter actually writes.**
+
+    This is the one that matters, and it is the direct analogue of `tier_claimed_in_a_plugin_manifest`
+    one line of authority further out. A publisher opening a pull request has exactly two documents
+    they may write, and neither has a field that reaches the window: `additionalProperties: false`
+    makes it a schema failure rather than a field somebody has to remember to ignore.
+    """
+    document = _plugin(repo)
+    document["featured"] = True
+    _write_plugin(repo, document)
+
+
+def a_plugin_spotlighting_itself(repo, ctx):
+    """The same claim spelled the other way, because a guard that only knows one spelling is a guard
+    against a typo. `spotlight` is a different word, the same self-assertion, and the same refusal —
+    and it is refused by the schema being closed rather than by a list of forbidden names, which is
+    what makes the third spelling refused too."""
+    document = _plugin(repo)
+    document["spotlight"] = {"blurb": "the best lamp plugin there is, honestly"}
+    _write_plugin(repo, document)
+
+
+def a_featured_list_beside_a_manifest(repo, ctx):
+    """Not a field this time but a file, dropped in the plugin's own directory where a publisher can
+    write. A directory that accepted it would have made the schema's refusal decorative."""
+    fixture.write_json(os.path.join(repo, "plugins", fixture.PLUGIN_ID, "featured.json"),
+                       {"schema": 1, "featured": [{"plugin": fixture.PLUGIN_ID}]})
+
+
+def the_featured_list_edited_without_approval(repo, ctx):
+    """Which plugins go in the window is an editorial decision, and only a maintainer takes it. The
+    label is how they say so — the same mechanism a key rotation and a verification go through."""
+    document = _featured(repo)
+    document["featured"][0]["note"] = "moved to the top after a fortnight of installs"
+    _write_featured(repo, document)
+
+
+def a_window_pointing_at_a_plugin_that_does_not_exist(repo, ctx):
+    document = _featured(repo)
+    document["featured"][0]["plugin"] = "invalid.example.nothing"
+    _write_featured(repo, document)
+
+
+def a_window_pointing_at_a_plugin_with_every_version_withdrawn(repo, ctx):
+    """The subtle one: the plugin exists, the id resolves, the row is in the catalogue — and there is
+    nothing behind it anybody can install. A window with an empty box in it, and the person who
+    follows it concludes the store is broken rather than the list."""
+    plugin = _plugin(repo)
+    for version in plugin["versions"]:
+        version["withdrawn"] = {"at": "2026-09-01", "reason": "a fault nobody should be installing"}
+    _write_plugin(repo, plugin)
+
+
+def the_same_plugin_featured_twice(repo, ctx):
+    document = _featured(repo)
+    document["featured"].append({"plugin": fixture.PLUGIN_ID})
+    _write_featured(repo, document)
+
+
+def spotlit_and_featured_at_once(repo, ctx):
+    """One plugin in two places in one window. Resolving it quietly would hide that somebody edited
+    the list without reading it, which is the fault worth surfacing rather than the duplicate row."""
+    document = _featured(repo)
+    document["spotlight"] = fixture.featured_spotlight()
+    _write_featured(repo, document)
+
+
+def a_window_with_everything_in_it(repo, ctx):
+    """Past some length featuring stops distinguishing anything and becomes a second copy of the
+    catalogue in an order nobody chose."""
+    document = _featured(repo)
+    document["featured"] = [{"plugin": fixture.PLUGIN_ID}] * 13
+    _write_featured(repo, document)
+
+
+def a_tier_smuggled_into_the_featured_list(repo, ctx):
+    """**The blur this whole design exists to make unspellable.**
+
+    Featuring is editorial and a tier is evidential, and the one place somebody could quietly hand
+    themselves the second while writing the first is a field on a featured row. There is no such
+    field and the schema is closed, so this is a schema failure rather than a value that gets
+    published because nothing looked at it.
+    """
+    document = _featured(repo)
+    document["featured"][0]["tier"] = "verified"
+    _write_featured(repo, document)
+
+
+def a_spotlight_with_nothing_said_about_it(repo, ctx):
+    """The blurb is required. Spotlighting something is publishing our prose beside a stranger's
+    binary, and a spotlight with no sentence is the whole of that weight with none of the thought."""
+    document = _featured(repo)
+    document["featured"] = []
+    document["spotlight"] = fixture.featured_spotlight()
+    del document["spotlight"]["blurb"]
+    _write_featured(repo, document)
+
+
+def something_else_in_the_curation_directory(repo, ctx):
+    with open(os.path.join(repo, "curation", "featured.backup.json"), "w", encoding="utf-8") as handle:
+        handle.write('{"schema": 1, "featured": []}')
+
+
+# ---- and the editorial changes that are allowed ----------------------------------------------
+
+
+def the_window_rearranged(repo, ctx):
+    """A maintainer reordering the list. With the label this passes — and it has to be watched
+    passing, because a check that only ever refuses is a check nobody can tell from a blanket
+    denial. This is the happy case for the whole feature: it is what the cloud admin console opens
+    a pull request to do."""
+    document = _featured(repo)
+    document["featured"] = []
+    document["spotlight"] = fixture.featured_spotlight()
+    _write_featured(repo, document)
+
+
+def the_window_emptied(repo, ctx):
+    """Nothing featured, said out loud. An empty window is a window, and it is what this registry is
+    in today — so it must not be mistaken for a broken file."""
+    _write_featured(repo, {"schema": 1, "updatedAt": "2026-09-01", "featured": []})
+
+
 SCENARIOS = [
     # (name, mutation, expected code)
     ("an unknown field in the manifest", unknown_field, "SCHEMA_INVALID"),
@@ -511,6 +660,25 @@ SCENARIOS = [
     ("a verification record for a publisher who is already official",
      official_publisher_given_a_verification_record, "VERIFICATION_REDUNDANT"),
     ("a stray file in verification/", something_else_in_the_verification_directory, "LAYOUT_UNEXPECTED_FILE"),
+
+    # Featuring. The first three are the self-claim — the thing a submitter would most like to write
+    # — and the rest are a maintainer's own list being wrong.
+    ("a plugin featuring itself", a_plugin_featuring_itself, "SCHEMA_INVALID"),
+    ("a plugin spotlighting itself", a_plugin_spotlighting_itself, "SCHEMA_INVALID"),
+    ("a featured list dropped beside a manifest", a_featured_list_beside_a_manifest,
+     "LAYOUT_UNEXPECTED_FILE"),
+    ("the featured list edited with nobody's approval", the_featured_list_edited_without_approval,
+     "CURATION_UNAPPROVED"),
+    ("a window pointing at a plugin that does not exist",
+     a_window_pointing_at_a_plugin_that_does_not_exist, "CURATION_UNKNOWN_PLUGIN"),
+    ("a window pointing at a plugin with every version withdrawn",
+     a_window_pointing_at_a_plugin_with_every_version_withdrawn, "CURATION_NOTHING_OFFERED"),
+    ("the same plugin featured twice", the_same_plugin_featured_twice, "CURATION_DUPLICATE"),
+    ("one plugin both spotlit and featured", spotlit_and_featured_at_once, "CURATION_DUPLICATE"),
+    ("a window with everything in it", a_window_with_everything_in_it, "CURATION_TOO_MANY"),
+    ("a tier smuggled into the featured list", a_tier_smuggled_into_the_featured_list, "SCHEMA_INVALID"),
+    ("a spotlight with nothing said about it", a_spotlight_with_nothing_said_about_it, "SCHEMA_INVALID"),
+    ("a stray file in curation/", something_else_in_the_curation_directory, "LAYOUT_UNEXPECTED_FILE"),
 ]
 
 # Things that look like sabotage and are actually allowed. Without these the suite would pass
@@ -686,9 +854,34 @@ def main() -> int:
             finally:
                 os.rename(kept, vanished)
 
+            print("\nfeaturing — who may fill the window, and what it is allowed to mean")
+            for description, mutate in (
+                ("the window rearranged, with the label", the_window_rearranged),
+                ("the window emptied, with the label", the_window_emptied),
+            ):
+                repo = copy_repo(ctx["repo"], work)
+                mutate(repo, ctx)
+                outcome = run_validator(repo, origin_map, allow_curation=True)
+                run.check(f"{description} → passes", outcome.returncode == 0,
+                          json.dumps(outcome.payload, indent=2))
+
+            # The counter-control for the label itself. Without this, `CURATION_UNAPPROVED` would go
+            # on passing if the gate were inverted to refuse everything, or if `changed` were
+            # computed as "always true" — which is exactly the shape the verification check was
+            # written to avoid and is worth one check to hold.
+            repo = copy_repo(ctx["repo"], work)
+            outcome = run_validator(repo, origin_map)
+            run.check("an untouched window needs no label", outcome.returncode == 0,
+                      json.dumps(outcome.payload, indent=2))
+
+            for description, condition, detail in _featuring_is_not_a_tier():
+                run.check(description, condition, detail)
+
             print("\nthe index")
             run.check(*_index_checks(ctx, scratch))
             run.check(*_withdrawn_tier_check(ctx, scratch))
+            for description, condition, detail in _featured_index_checks(ctx, scratch):
+                run.check(description, condition, detail)
             for description, condition, detail in _signing_checks(ctx, scratch):
                 run.check(description, condition, detail)
 
@@ -815,6 +1008,170 @@ def _index_checks(ctx, scratch):
 
     return ("the generated index is schema-valid, offers the newest version per abi, and carries the tier",
             not problems, "\n".join(problems))
+
+
+def _featuring_is_not_a_tier():
+    """The properties that hold by construction, asserted against the real files rather than assumed.
+
+    Every one of these is a thing somebody could undo in a one-line diff that no sabotage above would
+    notice, because none of them changes what the validator refuses — they change what it is
+    *possible* to write, which is the stronger guarantee and the quieter one to lose.
+    """
+
+    schema_dir = os.path.join(ROOT, "schema")
+    featured = fixture.read_json(os.path.join(schema_dir, "featured.schema.json"))
+    submission = fixture.read_json(os.path.join(schema_dir, "submission.schema.json"))
+    install = fixture.read_json(os.path.join(schema_dir, "index-plugin.schema.json"))
+    catalogue = fixture.read_json(os.path.join(schema_dir, "index-catalog.schema.json"))
+
+    # Closed at every level, which is what makes "a tier smuggled into the featured list" a schema
+    # failure rather than a field that rides along because nothing looked at it.
+    open_levels = []
+
+    def walk(node, path):
+        if isinstance(node, dict):
+            if node.get("type") == "object" and node.get("additionalProperties") is not False:
+                open_levels.append(path or "(root)")
+            for key, value in node.items():
+                walk(value, f"{path}/{key}" if path else key)
+        elif isinstance(node, list):
+            for n, value in enumerate(node):
+                walk(value, f"{path}/{n}")
+
+    walk(featured, "")
+    yield ("every level of the featured schema refuses a field it does not know",
+           not open_levels, "\n".join(open_levels))
+
+    # The self-claim, made unspellable rather than merely refused.
+    yield ("a submission has no field that reaches the window",
+           submission.get("additionalProperties") is False
+           and not {"featured", "spotlight"} & set(submission.get("properties", {})),
+           json.dumps(sorted(submission.get("properties", {})), indent=2))
+
+    # And the install document has nowhere to put one, so featuring cannot grow into a dependency
+    # even by somebody deciding it would be convenient.
+    yield ("the document a hub installs from has nowhere to put a window",
+           install.get("additionalProperties") is False
+           and not {"featured", "spotlight"} & set(install.get("properties", {})),
+           json.dumps(sorted(install.get("properties", {})), indent=2))
+
+    # The window carries an order and no judgement about anybody.
+    window = catalogue.get("properties", {}).get("featured", {})
+    fields = set(window.get("properties", {}))
+    yield ("the published window carries an order and no tier",
+           fields == {"spotlight", "plugins"}, json.dumps(sorted(fields), indent=2))
+
+    # The number lives in one place. A limit copied into the schema as `maxItems` would be a second
+    # copy that agrees with the first until somebody moves one.
+    rows = featured.get("properties", {}).get("featured", {})
+    yield ("the size of the window is a constant in policy.py and not a second copy in the schema",
+           "maxItems" not in rows, json.dumps(rows, indent=2))
+
+    for name in ("README.md", os.path.join("curation", "README.md"),
+                 os.path.join("docs", "featured.md")):
+        path = os.path.join(ROOT, name)
+        try:
+            with open(path, "r", encoding="utf-8") as handle:
+                body = handle.read()
+        except OSError as error:
+            yield (f"{name} carries the sentence that separates featuring from a tier", False, str(error))
+            continue
+        yield (f"{name} carries the sentence that separates featuring from a tier",
+               FEATURED_DISCLAIMER in body, f"{path} does not contain it")
+
+
+def _featured_index_checks(ctx, scratch):
+    """Where the window lands, and — the load-bearing half — where it does not.
+
+    `catalog.json` is browse and search and may grow; `plugins/<id>.json` is what a hub fetches to
+    install and is kept small on purpose. Featuring is published to the first and to nothing else,
+    which is what makes *"a hub that never reads the catalogue installs exactly what it would have
+    installed anyway"* a fact about the file layout rather than a paragraph somebody wrote. So the
+    second assertion here is not a tidiness check: it is the whole guarantee, and it would go on
+    passing silently if it were only ever asserted about a registry with nothing featured.
+    """
+
+    out = os.path.join(scratch, "index-featured")
+    env = dict(os.environ, PYTHONPATH=os.path.join(ROOT, "tools"))
+
+    def build(repo):
+        result = subprocess.run(
+            [sys.executable, "-m", "registry.build_index", "--repo", repo, "--out", out,
+             "--generated-at", "2026-08-15T00:00:00+00:00"],
+            capture_output=True, text=True, env=env, cwd=ROOT)
+        return result
+
+    result = build(ctx["repo"])
+    if result.returncode != 0:
+        yield ("the index generates with a window in it", False, result.stderr)
+        return
+
+    catalogue = fixture.read_json(os.path.join(out, "catalog.json"))
+    document = fixture.read_json(os.path.join(out, "plugins", f"{fixture.PLUGIN_ID}.json"))
+
+    window = catalogue.get("featured")
+    yield ("the browse catalogue carries the window it was given",
+           isinstance(window, dict) and window.get("plugins") == [fixture.PLUGIN_ID],
+           json.dumps(window, indent=2))
+
+    # The one that matters. Asserted over the whole document rather than over a named field, so a
+    # future generator that publishes it under some other name fails here rather than shipping.
+    leaked = [key for key in ("featured", "spotlight") if key in document]
+    yield ("the install document carries no window, under any name",
+           not leaked and "featured" not in json.dumps(document),
+           f"the per-plugin document contains {leaked!r}")
+
+    # The note is ours, and it stays ours. The fixture's row carries one on purpose: over an empty
+    # list this assertion is true of nothing, and a sabotage that published every note was watched
+    # passing here for exactly that reason before the fixture grew a row.
+    yield ("a maintainer's private note is not published",
+           "the only thing published so far" not in json.dumps(window)
+           and "note" not in json.dumps(window),
+           json.dumps(window, indent=2))
+
+    work = os.path.join(scratch, "work")
+    os.makedirs(work, exist_ok=True)
+
+    # The spotlight, which is the one line of ours that is meant to be read.
+    repo = copy_repo(ctx["repo"], work)
+    fixture.write_json(fixture.featured_path(repo),
+                       {"schema": 1, "featured": [], "spotlight": fixture.featured_spotlight()})
+    result = build(repo)
+    if result.returncode != 0:
+        yield ("the index generates with a spotlight in it", False, result.stderr)
+        return
+    window = fixture.read_json(os.path.join(out, "catalog.json")).get("featured", {})
+    yield ("the spotlight is published with the sentence somebody wrote for it",
+           window.get("spotlight", {}).get("id") == fixture.PLUGIN_ID
+           and "Talks to the bridge" in window.get("spotlight", {}).get("blurb", ""),
+           json.dumps(window, indent=2))
+
+    # And the generator's own belt: an id the catalogue does not carry is dropped rather than
+    # published as a link into our own 404. The validator refuses this on a pull request, so the
+    # only way to see it is to build over a tree the validator never saw.
+    repo = copy_repo(ctx["repo"], work)
+    fixture.write_json(fixture.featured_path(repo), {
+        "schema": 1,
+        "featured": [{"plugin": "invalid.example.nothing"}, {"plugin": fixture.PLUGIN_ID}],
+    })
+    result = build(repo)
+    if result.returncode != 0:
+        yield ("an index still generates over a window naming a plugin that is gone", False, result.stderr)
+        return
+
+    window = fixture.read_json(os.path.join(out, "catalog.json")).get("featured", {})
+    yield ("a featured id with no row is dropped rather than published as a link into our own 404",
+           window.get("plugins") == [fixture.PLUGIN_ID], json.dumps(window, indent=2))
+
+    # Nothing featured is nothing published, rather than an empty block a console has to tell from
+    # the absence of one.
+    repo = copy_repo(ctx["repo"], work)
+    os.remove(fixture.featured_path(repo))
+    result = build(repo)
+    empty = fixture.read_json(os.path.join(out, "catalog.json"))
+    yield ("no featured list publishes no window at all, rather than an empty one",
+           result.returncode == 0 and "featured" not in empty,
+           json.dumps(empty.get("featured"), indent=2))
 
 
 def _withdrawn_tier_check(ctx, scratch):

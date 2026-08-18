@@ -23,7 +23,7 @@ import json
 import os
 import sys
 
-from . import verification
+from . import curation, verification
 from .validate import load_json
 
 
@@ -161,7 +161,24 @@ def build(repo: str, generated_at: str | None = None) -> tuple[dict[str, dict], 
                 entry_row[optional] = plugin[optional]
         catalogue.append(entry_row)
 
-    return documents, {"schema": 1, "generatedAt": stamp, "plugins": catalogue}
+    # The shop window, and it goes in the browse document **and nowhere else**.
+    #
+    # That is the whole of what keeps featuring from becoming load-bearing. `catalog.json` is browse
+    # and search, and *"no install or update path may depend on it"*; `plugins/<id>.json` is what a
+    # hub fetches to install. So a hub that never reads the catalogue — one that was sent a link,
+    # one whose feed is unreachable, one browsing from a cache — installs exactly what it would have
+    # installed anyway, because the document it reads has no field for this and
+    # `additionalProperties: false` refuses to grow one. Written as a fact about the file layout
+    # rather than as a promise in a paragraph, because a paragraph is not a check.
+    #
+    # Omitted entirely rather than written as an empty block: a console that has to tell "nothing is
+    # featured" from "featured, and it is empty" has been given a distinction with no meaning.
+    featured = curation.published(curation.load(repo), {row["id"] for row in catalogue})
+
+    document = {"schema": 1, "generatedAt": stamp, "plugins": catalogue}
+    if featured is not None:
+        document["featured"] = featured
+    return documents, document
 
 
 def write(repo: str, out: str, generated_at: str | None = None) -> list[str]:

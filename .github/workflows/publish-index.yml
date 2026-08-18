@@ -34,6 +34,18 @@ on:
       # green from before the key existed. A rotation is the same shape and worse — the feed would go on
       # serving signatures made with a key the field is about to stop trusting.
       - 'keys/**'
+      # `verification/**` and `curation/**` are the same omission again, found while adding the second
+      # of them. Both change the published documents — a tier is written into every plugin a publisher
+      # has, and the featured block is written into `catalog.json` — and neither was listed, so a
+      # maintainer could label, review and merge a verification and watch the feed go on saying
+      # `unverified` for ever, with the last run of this workflow sitting green from an unrelated push.
+      #
+      # The general shape, now hit three times: **this list has to name every input `build_index.py`
+      # reads**, and that is `plugins/`, `publishers/`, `verification/`, `curation/` and the generator
+      # itself. Anything that changes the output and is not listed here is a merge that publishes
+      # nothing and reports nothing.
+      - 'verification/**'
+      - 'curation/**'
   workflow_dispatch:
 
 permissions:

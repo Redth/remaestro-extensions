@@ -9,6 +9,31 @@
   "properties": {
     "schema": { "type": "integer", "const": 1 },
     "generatedAt": { "type": "string" },
+
+    "featured": {
+      "description": "The shop window, and it is in this document and in no other. It is absent when nothing is featured rather than present and empty, so a console never has to tell those apart. THIS IS EDITORIAL AND IS NOT A TIER: it says we put something in front of you, never that anybody checked it, and a console that renders it anywhere near a publisher chip has blurred the one distinction the tiers exist to make. It carries ids and an order and no tier, no badge and no evidence — there is nothing here to be evidence of. Deliberately absent from index-plugin.schema.json: the per-plugin document is what a hub installs from, and featuring must never be on that path.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["plugins"],
+      "properties": {
+        "spotlight": {
+          "description": "One plugin with a sentence a maintainer wrote about it, or absent. Never one of the ids in 'plugins' below — the generator refuses the overlap rather than resolving it.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "blurb"],
+          "properties": {
+            "id": { "type": "string" },
+            "blurb": { "type": "string" }
+          }
+        },
+        "plugins": {
+          "description": "Plugin ids, in the order somebody chose. Every one of them has a row in 'plugins' at the root of this document — the generator drops any that does not, because a window pointing at something this very document does not carry is a 404 against our own feed.",
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+
     "plugins": {
       "type": "array",
       "items": {

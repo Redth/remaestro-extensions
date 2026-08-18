@@ -247,6 +247,7 @@ def _lay_out_repo(repo: str, publisher_key: Keypair, archives: dict) -> None:
     os.makedirs(os.path.join(repo, "publishers"), exist_ok=True)
     os.makedirs(os.path.join(repo, "plugins", PLUGIN_ID), exist_ok=True)
     os.makedirs(os.path.join(repo, "verification"), exist_ok=True)
+    os.makedirs(os.path.join(repo, "curation"), exist_ok=True)
 
     write_json(os.path.join(repo, "publishers", f"{PUBLISHER_ID}.json"), {
         "id": PUBLISHER_ID,
@@ -268,6 +269,13 @@ def _lay_out_repo(repo: str, publisher_key: Keypair, archives: dict) -> None:
     # and "a changed one needs both" two different, separately observable behaviours.
     write_json(verification_path(repo), verification_record())
 
+    # Featured as of the base ref, for the same reason the verification is: it makes "an unchanged
+    # list needs no label" and "an edited one needs one" two separately observable behaviours rather
+    # than one. It also means the clean control builds an index that actually carries a window, so
+    # the checks that the window lands in `catalog.json` and lands in no per-plugin document are
+    # checking something present rather than agreeing that two absent things are both absent.
+    write_json(featured_path(repo), featured_list())
+
     run("git", "init", "-q", "-b", "main", repo)
     run("git", "-C", repo, "config", "user.email", "tests@example.invalid")
     run("git", "-C", repo, "config", "user.name", "registry tests")
@@ -288,6 +296,46 @@ def publisher_path(repo: str) -> str:
 
 def verification_path(repo: str, publisher_id: str = PUBLISHER_ID) -> str:
     return os.path.join(repo, "verification", f"{publisher_id}.json")
+
+
+def featured_path(repo: str) -> str:
+    return os.path.join(repo, "curation", "featured.json")
+
+
+def featured_list() -> dict:
+    """The shop window, as a maintainer would write it.
+
+    Note what is *not* in it and cannot be: a tier, a badge, or anything a publisher wrote. This
+    document lives in a directory no submission can reach, and its schema refuses an unknown field —
+    both of which the suite sabotages below. Featuring is an opinion; the tiers are the checks.
+
+    A populated `featured` row rather than an empty list, and the row carries a `note`. That is not
+    decoration: the checks that the published window is a list of ids and that a maintainer's note
+    never leaves this repository both pass trivially over an empty list, and a sabotage of either
+    was watched passing for exactly that reason before the fixture was changed. No spotlight here —
+    the sabotages that need one add it, because the one plugin this fixture publishes cannot be both
+    without tripping the duplicate rule the control has to stay clear of.
+    """
+
+    return {
+        "schema": 1,
+        "updatedAt": "2026-08-18",
+        "featured": [{
+            "plugin": PLUGIN_ID,
+            "note": "the only thing published so far, and it is a reasonable first thing to show",
+            "since": "2026-08-18",
+        }],
+    }
+
+
+def featured_spotlight() -> dict:
+    """A spotlight over the fixture's plugin, for the checks that are about the blurb."""
+
+    return {
+        "plugin": PLUGIN_ID,
+        "blurb": "Talks to the bridge over the local network, so it keeps working unplugged.",
+        "since": "2026-08-18",
+    }
 
 
 def verification_record(publisher_id: str = PUBLISHER_ID) -> dict:

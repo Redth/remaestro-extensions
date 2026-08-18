@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Redth/remaestro-extensions/schema/featured.schema.json",
+  "title": "reMaestro featured plugins",
+  "description": "The one file at curation/featured.json: which plugins the console puts in front of somebody browsing, and in what order. Written by a maintainer and never by a publisher — the same authority the verified tier has, for a related but different reason. A tier is EVIDENTIAL: it records something that was checked, and it is refused unless the evidence resolves at a derived URL. Featuring is EDITORIAL: nobody checked anything, somebody decided. Neither may be written by its subject, and nothing here may be read as either a tier or a safety claim; see README.md.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "featured"],
+  "properties": {
+    "$schema": { "type": "string" },
+
+    "schema": { "type": "integer", "const": 1 },
+
+    "updatedAt": {
+      "description": "When somebody last decided this. A date rather than a timestamp: an editorial list changes on the scale of weeks.",
+      "type": "string",
+      "format": "date"
+    },
+
+    "spotlight": {
+      "description": "At most one plugin, with a sentence about why. Its own field rather than the first row of the list because it carries prose a maintainer wrote about somebody else's software, which is a heavier thing to publish than a place in an order — so the blurb is required, and you cannot spotlight something without saying why. A plugin may be spotlit or featured and never both; the validator refuses the overlap rather than resolving it.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["plugin", "blurb"],
+      "properties": {
+        "plugin": {
+          "description": "The id of a plugin with a directory in plugins/. Refused if there is none, and refused if it has no version anybody could install.",
+          "type": "string",
+          "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$",
+          "maxLength": 128
+        },
+        "blurb": {
+          "description": "Why this one, in a sentence somebody reading the store would find useful. It is our editorial voice about a stranger's binary, so it may describe what a plugin does and must never say or imply that it is safe, audited or endorsed — nothing here checked any of that.",
+          "type": "string",
+          "minLength": 16,
+          "maxLength": 240
+        },
+        "since": { "type": "string", "format": "date" }
+      }
+    },
+
+    "featured": {
+      "description": "An ordered list. The order IS the editorial content, which is why this is one file rather than a record per plugin: a reordering has to read as a reordering in a diff, and two records each carrying a rank would collide with no conflict.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["plugin"],
+        "properties": {
+          "plugin": {
+            "type": "string",
+            "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$",
+            "maxLength": 128
+          },
+          "note": {
+            "description": "For whoever reads this file in a year — why this is on the list. Not published: the index carries the order and the spotlight's blurb and nothing else, because a note per row is a second place for our voice to end up beside a stranger's plugin without anybody having reviewed it as copy.",
+            "type": "string",
+            "maxLength": 500
+          },
+          "since": { "type": "string", "format": "date" }
+        }
+      }
+    }
+  }
+}

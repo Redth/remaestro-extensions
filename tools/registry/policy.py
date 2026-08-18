@@ -112,3 +112,20 @@ WELL_KNOWN_KEY = "remaestro-publisher"
 # Evidence is a line of text. Anything larger is a page that happens to be served there, and reading
 # it is somebody else choosing how much of our runner's memory to use.
 MAX_EVIDENCE_BYTES = 64 * 1024
+
+# ---------------------------------------------------------------------------------------------
+# Featuring
+#
+# **Editorial, and never evidential.** A tier records something somebody checked and is refused
+# unless the evidence still resolves at a derived URL. Featuring records something somebody
+# *decided*, and there is nothing to check — which is exactly why it is kept in its own file, under
+# its own label, and published only to the browse catalogue. See tools/registry/curation.py.
+#
+# It is not a tier, it is not a badge, and it must never be rendered as either. "We put this in the
+# window" and "we checked who publishes this" are different sentences, and the second is the one
+# somebody would act on.
+
+# How many plugins the window holds. A window with everything in it is a window with nothing in it:
+# past some length, featuring stops distinguishing anything and becomes a second copy of the
+# catalogue in an arbitrary order. Twelve is a browse row on a phone and a grid on a console.
+MAX_FEATURED = 12

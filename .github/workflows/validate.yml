@@ -57,6 +57,16 @@ jobs:
           # the validator and fails the run, and that one is enforced by branch protection. Neither
           # is the other's substitute.
           REGISTRY_ALLOW_VERIFICATION: ${{ contains(github.event.pull_request.labels.*.name, 'verification') && '1' || '0' }}
+          # And a third, for the featured list. Same mechanism, different thing being asserted: the
+          # verification label says "I decided this publisher is who they say they are", and this one
+          # says "I decided this belongs in the window". The second is a smaller claim and a much more
+          # tempting diff to open, which is why it needs a maintainer as much as the first does.
+          #
+          # Most changes here will arrive from the cloud admin console, which composes a branch and
+          # opens a pull request rather than pushing — so this label and a human merge are still both
+          # in the way, which is the entire reason that console opens pull requests instead of writing
+          # to main.
+          REGISTRY_ALLOW_CURATION: ${{ contains(github.event.pull_request.labels.*.name, 'curation') && '1' || '0' }}
         run: |
           python -m registry.validate \
             --repo . \

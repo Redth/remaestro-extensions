@@ -12,6 +12,13 @@
 # rather than assuming. See docs/verification.md.
 /verification/  @Redth
 
+# `curation/` is the shop window, and it is here for a related reason rather than the same one. A
+# verification is a claim that had to survive a check; featuring survives no check, because there is
+# nothing to check — it is an opinion, and an opinion published beside somebody else's binary is
+# still ours. It is also the field a submitter would most like to write, which is why there is no
+# field and why this path needs the maintainer-only `curation` label as well as a review here.
+/curation/      @Redth
+
 # The rules themselves, and the trust statement that goes with them.
 /tools/registry/  @Redth
 /schema/          @Redth

@@ -72,6 +72,22 @@ badge would be claiming.
 Everything else — what counts as evidence, the `.nojekyll` trap on GitHub Pages, and exactly which
 half CI enforces — is in [docs/verification.md](docs/verification.md).
 
+### And featuring is not a fourth tier
+
+A few plugins get shown first on the store screen. That list is in `curation/featured.json`, it is
+written by a maintainer, and it means something different in kind from everything above.
+
+**Featured says we put it in the window. It never says anybody checked it.**
+
+A tier is refused unless something can be shown — a document at a URL your own id implies, a diff in
+our own source. Featuring is an opinion, there is nothing to show, and a featured plugin from an
+unverified publisher is still from an unverified publisher. It carries no badge, sits in no tier, and
+appears only in the browse catalogue — the document that installs has no field for it, so **a hub
+that never sees the window installs exactly what it would have installed anyway.**
+
+A plugin cannot feature itself: there is no such field, the manifest refuses one, and the list is in
+a directory needing a maintainer's label. [docs/featured.md](docs/featured.md).
+
 ---
 
 ## What review is, and is not

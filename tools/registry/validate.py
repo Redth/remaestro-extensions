@@ -23,7 +23,7 @@ import tempfile
 from dataclasses import dataclass
 from typing import Any
 
-from . import fetch, gitref, policy, verification
+from . import curation, fetch, gitref, policy, verification
 
 REPO_ROOT_MARKERS = ("schema", "plugins", "publishers")
 
@@ -162,6 +162,19 @@ def check_layout(report: Report, repo: str) -> tuple[list[str], list[str], list[
                         "verification/ holds one <publisher-id>.json per verified publisher and nothing else")
             continue
         verification_files.append(entry)
+
+    # Same rule again for the editorial list, and it is doing more work than it looks like. `curation/`
+    # holds exactly one file; a second one is either somebody splitting the list — which would put the
+    # order back into a rank field, the thing having one file avoids — or a file placed here to be
+    # mistaken for it.
+    curation_dir = os.path.join(repo, curation.DIRECTORY)
+    for entry in sorted(os.listdir(curation_dir)) if os.path.isdir(curation_dir) else []:
+        if entry in ("README.md", ".gitkeep", "featured.json"):
+            continue
+        report.fail("LAYOUT_UNEXPECTED_FILE", f"{curation.DIRECTORY}/{entry}",
+                    f"{curation.DIRECTORY}/ holds featured.json and nothing else. The featured list is one "
+                    "ordered file on purpose: the order is the editorial content, and an order split across "
+                    "several files is a rank field two pull requests can each win")
 
     return publisher_files, plugin_dirs, verification_files
 
@@ -356,6 +369,112 @@ def _check_verifications_append_only(report: Report, repo: str, base_ref: str | 
             report.fail("VERIFICATION_REMOVED", f"verification/{name}",
                         "this verification was deleted. Set status to 'withdrawn' with a reason instead — the "
                         "history of what we once checked is what a later reader has to be able to see")
+
+
+# ---------------------------------------------------------------------------------------------
+# featuring
+
+
+def check_featured(report: Report, repo: str, validator, plugin_dirs: list[str],
+                   base_ref: str | None, allow_curation: bool) -> None:
+    """The shop window: who may fill it, and the two things that make an entry meaningless.
+
+    **This is the only check in this file with nothing to fetch, because there is nothing to check.**
+    Every other rule here asks whether a claim survives contact with the world — do the bytes hash to
+    that, does the evidence still say this. Featuring makes no such claim: it says somebody decided
+    something. So what a validator can do about it is narrow, and pretending otherwise would be the
+    same overclaim the tier documentation spends a page refusing.
+
+    What it can do:
+
+    **Refuse a diff nobody with write access asked for.** The `curation` label, exactly as
+    `verification` works and for a related reason. There the self-claim being blocked is *"I am who I
+    say I am"*; here it is *"put me in the window"*, which is a smaller lie and a much more tempting
+    one — it is the field a submitter would most like to write, which is precisely why there is no
+    field and why the file is not one a submission can reach.
+
+    **Refuse an entry that points at nothing.** A featured id with no plugin directory, or one whose
+    every version has been withdrawn, is a window with an empty box in it. Somebody clicks it and is
+    offered nothing, and the fault looks like the store's rather than the list's.
+
+    **Refuse a window with everything in it**, which distinguishes nothing and is a second copy of
+    the catalogue in an order nobody chose.
+
+    **Refuse the same plugin twice**, including once as spotlight and once in the list. Two rows for
+    one plugin is a list somebody edited without reading, and resolving it quietly would hide that.
+
+    What it cannot do, and does not pretend to: say whether this is a good plugin to feature. That is
+    the judgement, and it is the whole of what the label is asserting somebody made.
+    """
+
+    document = curation.load(repo)
+    path = curation.PATH.replace(os.sep, "/")
+    exists = os.path.isfile(os.path.join(repo, curation.PATH))
+
+    if exists and document is None:
+        report.fail("SCHEMA_INVALID", path,
+                    "this file is not readable JSON. It is skipped by the index generator rather than "
+                    "taking the whole feed down for a shop window, so a malformed one publishes nothing "
+                    "and says nothing — which is why it is refused here instead")
+        return
+
+    if document is None:
+        # No file is "nothing is featured", which is the ordinary state and is this registry's today.
+        return
+
+    if not check_schema(report, validator, document, path):
+        return
+
+    # Added or edited is a maintainer deciding something; a file that has sat in the tree since before
+    # this pull request is not. Whether that is a change is a property of the difference, so with no
+    # base ref there is no question to answer — the same reasoning `check_verifications` gives.
+    previous = gitref.read_json_at(repo, base_ref, path) if base_ref is not None else None
+    if base_ref is not None and previous != document and not allow_curation:
+        report.fail("CURATION_UNAPPROVED", path,
+                    "this pull request edits the featured list. Which plugins go in the window is an "
+                    "editorial decision and only a maintainer takes it, so it needs the 'curation' label. "
+                    "Note what this is not: featuring says we put something in front of you and never that "
+                    "anybody checked it, which is what the tiers are for and what they are refused without")
+
+    known = set(plugin_dirs)
+    rows = curation.entries(document)
+    one = curation.spotlight(document)
+
+    if len(rows) > policy.MAX_FEATURED:
+        report.fail("CURATION_TOO_MANY", path,
+                    f"{len(rows)} plugins are featured and the window holds {policy.MAX_FEATURED}. Past "
+                    "some length featuring stops distinguishing anything and becomes a second copy of the "
+                    "catalogue in an arbitrary order")
+
+    seen: set[str] = set()
+    if one is not None:
+        seen.add(one["plugin"])
+
+    for row in rows:
+        plugin_id = row["plugin"]
+        if plugin_id in seen:
+            report.fail("CURATION_DUPLICATE", path,
+                        f"{plugin_id!r} is featured more than once, or is both the spotlight and on the "
+                        "list. One plugin, one place in the window — two rows for one plugin is a list "
+                        "somebody edited without reading, and resolving it quietly would hide that")
+        seen.add(plugin_id)
+
+    for plugin_id in ([one["plugin"]] if one is not None else []) + [r["plugin"] for r in rows]:
+        if plugin_id not in known:
+            report.fail("CURATION_UNKNOWN_PLUGIN", path,
+                        f"{plugin_id!r} is featured and there is no plugins/{plugin_id}/. A window pointing "
+                        "at nothing is worse than an empty one: somebody follows it and the store looks "
+                        "broken rather than the list")
+            continue
+
+        manifest, problem = load_json(os.path.join(repo, "plugins", plugin_id, "plugin.json"))
+        if problem is not None or not isinstance(manifest, dict):
+            continue    # check_plugins owns this failure and will report it in its own words
+        if not curation.installable(manifest):
+            report.fail("CURATION_NOTHING_OFFERED", path,
+                        f"every version of {plugin_id!r} has been withdrawn, so featuring it puts an empty "
+                        "box in the window. Take it off the list — a withdrawn plugin stays in the "
+                        "catalogue and stays searchable, which is the right amount of visible")
 
 
 # ---------------------------------------------------------------------------------------------
@@ -633,7 +752,7 @@ def _check_archive_contents(report: Report, where: str, document: dict, version:
 
 def validate(repo: str, base_ref: str | None, origins: fetch.OriginMap,
              offline: bool, allow_rotation: bool, recheck_all: bool = False,
-             allow_verification: bool = False) -> Report:
+             allow_verification: bool = False, allow_curation: bool = False) -> Report:
     report = Report()
 
     for marker in REPO_ROOT_MARKERS:
@@ -647,8 +766,8 @@ def validate(repo: str, base_ref: str | None, origins: fetch.OriginMap,
 
     if base_ref is None:
         report.note("no base ref given, so nothing was checked about pinning, reassignment, edits to "
-                    "published versions, or whether a verification in this tree is one a maintainer "
-                    "approved. CI always passes one.")
+                    "published versions, or whether a verification or a featured list in this tree is "
+                    "one a maintainer approved. CI always passes one.")
     if offline:
         report.note("offline, so no URL was fetched, no digest was checked and no signature was verified. "
                     "CI never runs this way.")
@@ -659,12 +778,14 @@ def validate(repo: str, base_ref: str | None, origins: fetch.OriginMap,
     submission = schema_validator(repo, "submission.schema.json")
     publisher_schema = schema_validator(repo, "publisher.schema.json")
     verification_schema = schema_validator(repo, "verification.schema.json")
+    featured_schema = schema_validator(repo, "featured.schema.json")
 
     publisher_files, plugin_dirs, verification_files = check_layout(report, repo)
     publishers = check_publishers(report, repo, publisher_files, publisher_schema, base_ref, allow_rotation)
     check_verifications(report, repo, verification_files, verification_schema, publishers, base_ref,
                         origins, offline, allow_verification, recheck_all)
     check_plugins(report, repo, plugin_dirs, submission, publishers, base_ref, origins, offline, recheck_all)
+    check_featured(report, repo, featured_schema, plugin_dirs, base_ref, allow_curation)
 
     return report
 
@@ -686,6 +807,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--allow-verification", action="store_true",
                         help="permit this change to write a publisher verification. Set by CI only when the "
                              "PR carries the 'verification' label, which only a maintainer can apply.")
+    parser.add_argument("--allow-curation", action="store_true",
+                        help="permit this change to edit the featured list. Set by CI only when the PR "
+                             "carries the 'curation' label, which only a maintainer can apply.")
     parser.add_argument("--origin-map", default=os.environ.get("REGISTRY_ORIGIN_MAP"),
                         help="rewrite URL prefixes before fetching, 'from=to' comma separated. Test suite only.")
     parser.add_argument("--json", action="store_true", help="emit findings as JSON")
@@ -699,8 +823,9 @@ def main(argv: list[str] | None = None) -> int:
 
     allow_rotation = args.allow_key_rotation or os.environ.get("REGISTRY_ALLOW_KEY_ROTATION") == "1"
     allow_verification = args.allow_verification or os.environ.get("REGISTRY_ALLOW_VERIFICATION") == "1"
+    allow_curation = args.allow_curation or os.environ.get("REGISTRY_ALLOW_CURATION") == "1"
     report = validate(os.path.abspath(args.repo), args.base_ref, origins, args.offline,
-                      allow_rotation, args.recheck_all, allow_verification)
+                      allow_rotation, args.recheck_all, allow_verification, allow_curation)
 
     if args.json:
         print(json.dumps({
