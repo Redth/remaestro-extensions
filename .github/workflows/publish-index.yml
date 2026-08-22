@@ -15,10 +15,11 @@ name: publish-index
 # that cannot change, while the hosting behind it can. Moving off Pages later is then a DNS edit
 # instead of an update every installed hub has to receive.
 #
-# Not provisioned yet: the DNS record does not exist and the Pages custom domain is not configured,
-# so a run of this workflow today publishes to the default Pages URL. Set the custom domain in the
-# repository's Pages settings when the record exists; deploy-pages picks it up from there, which is
-# why nothing here writes a CNAME.
+# Live since 2026-08-21: the DNS record resolves by CNAME to Pages and the custom domain is set in
+# the repository's Pages settings, with HTTPS enforced. deploy-pages picks the domain up from there,
+# which is why nothing here writes a CNAME — and why this comment is the only place in the workflow
+# that can go stale about it. It did, for the days between the domain being configured and this line
+# being read again; check the Pages settings rather than this sentence.
 
 on:
   push:

@@ -16,9 +16,17 @@ the secret store and in this repository's Actions secret, is read at the moment 
 to `openssl` through a file descriptor rather than written to the workspace.
 `tools/sign-index.sh` has no fallback that reads a key from a file, on purpose.
 
-`index-1.pub` is not here yet — the key has not been provisioned. Until it is,
-`.github/workflows/publish-index.yml` will fail at its verify step, which is the correct failure:
+`index-1.pub` was provisioned on **2026-08-17** and is in this directory. Before that it was absent,
+and `.github/workflows/publish-index.yml` failed at its verify step — the correct failure, since
 publishing an unverifiable feed would be worse than publishing none.
+
+**This paragraph said the key was not here for four days after it landed, in the same directory as
+the file.** Worth leaving a note about rather than silently correcting, because it is the failure
+this whole repository is arranged against: a claim about what is trusted, believed because it is
+written down, while the artefact beside it says otherwise. The hub-side copies of the same sentence
+went stale in the same way and were corrected on 2026-08-21. If you are reading this to find out
+whether a generation exists, **list the directory** — that is the answer, and this prose is a
+description of it that can rot.
 
 To add a generation: put its public half here, ship a hub release that trusts it alongside the
 current one, wait for the field to move, then drop the old file. Rotation is possible precisely
